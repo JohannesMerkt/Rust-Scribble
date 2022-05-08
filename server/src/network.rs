@@ -37,5 +37,8 @@ fn handle_client(mut tcp_stream: TcpStream, secret_key: EphemeralSecret) {
     let shared_secret = secret_key.diffie_hellman(&client_public);
     println!("Shared Secret: {:?}", shared_secret.as_bytes());
 
-    
+    let mut msg_buf = String::new();
+    let result = tcp_stream.read_to_string(&mut msg_buf);
+    let json_message = json::parse(&msg_buf).unwrap();
+    println!("{:?}", json_message["payload"]["message"]);
 }

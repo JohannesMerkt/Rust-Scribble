@@ -1,7 +1,10 @@
+use chacha20poly1305::aead::{Aead, NewAead};
+use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+use generic_array::GenericArray;
 use rand_core::OsRng;
 use std::io::{Error, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
-use std::thread;
+use std::str;
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
 fn generate_keypair() -> (PublicKey, EphemeralSecret) {
@@ -29,16 +32,27 @@ pub fn tcp_server() -> Result<(), Error> {
 
 fn handle_client(mut tcp_stream: TcpStream, secret_key: EphemeralSecret) {
     let mut buffer = [0; 32];
-    let read_size = tcp_stream.read(&mut buffer);
+    let _ = tcp_stream.read(&mut buffer);
 
     let client_public: PublicKey = PublicKey::from(buffer);
-    println!("Client Key: {:?}", client_public.as_bytes());
-
     let shared_secret = secret_key.diffie_hellman(&client_public);
-    println!("Shared Secret: {:?}", shared_secret.as_bytes());
 
-    let mut msg_buf = String::new();
-    let result = tcp_stream.read_to_string(&mut msg_buf);
-    let json_message = json::parse(&msg_buf).unwrap();
-    println!("{:?}", json_message["payload"]["message"]);
+    let mut msg_buf = [0; 1024];
+    let read_size = tcp_stream.read(&mut msg_buf);
+
+    let key: chacha20poly1305::Key = *Key::from_slice(shared_secret.as_bytes());
+    let cipher = ChaCha20Poly1305::new(&key);
+    let nonce: Nonce = GenericArray::clone_from_slice(&msg_buf[0..12]);
+
+    match read_size {
+        Ok(size) => {
+            let ciphertext = &msg_buf[12..size];
+            println!("Ciphertext: {:?}", ciphertext);
+            let recv_data: String = String::from_utf8(cipher.decrypt(&nonce, ciphertext).unwrap())
+                .expect("Invalid UTF-8 sequence");
+            let json_message = json::parse(&recv_data);
+            println!("{:?}", json_message);
+        }
+        Err(e) => println!("Error: {}", e),
+    }
 }

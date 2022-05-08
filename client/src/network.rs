@@ -1,3 +1,5 @@
+use chacha20poly1305::aead::{Aead, NewAead};
+use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use json::object;
 use rand_core::OsRng;
 use std::io::{Error, ErrorKind, Read, Write};
@@ -18,16 +20,26 @@ fn generate_keypair() -> (PublicKey, EphemeralSecret) {
 }
 
 // Take message and assemble a json object to send to the server.
-pub fn send_chat_message(mut net_info: NetworkInfo, msg: &str) -> Result<usize, Error> {
+pub fn send_chat_message(mut net_info: NetworkInfo, msg: &str) {
     let json_message = object! {
         code: 100,
         payload: {
             username: net_info.username,
-            message: "Did you see that?"
+            message: msg
         }
     };
 
-    net_info.stream.write(json_message.dump().as_bytes())
+    let key: chacha20poly1305::Key = *Key::from_slice(net_info.shared_secret.as_bytes());
+    let nonce = Nonce::from_slice(b"Unique nonce");
+    let cipher = ChaCha20Poly1305::new(&key);
+
+    let ciphertext = cipher
+        .encrypt(nonce, json_message.dump().as_bytes())
+        .expect("encryption failure!");
+
+    //prefix the nonce to the ciphertext
+    let _ = net_info.stream.write(nonce);
+    let _ = net_info.stream.write(ciphertext.as_ref());
 }
 
 pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<NetworkInfo, Error> {
@@ -37,16 +49,11 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
         println!("Connected to the server!");
 
         let mut buffer = [0; 32];
-        let read_size = tcp_stream.read(&mut buffer)?;
+        let _ = tcp_stream.read(&mut buffer)?;
         let server_key: PublicKey = PublicKey::from(buffer);
-
-        println!("Server Key {:?}", server_key.as_bytes());
-
         tcp_stream.write_all(public_key.as_bytes())?;
-        println!("My Key {:?}", public_key.as_bytes());
 
         let shared_secret = secret_key.diffie_hellman(&server_key);
-        println!("Shared Secret: {:?}", shared_secret.as_bytes());
 
         Ok(NetworkInfo {
             username: username.to_string(),

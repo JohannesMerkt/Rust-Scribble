@@ -4,7 +4,6 @@ use generic_array::GenericArray;
 use rand_core::OsRng;
 use std::io::{Error, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
-use std::str;
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
 fn generate_keypair() -> (PublicKey, EphemeralSecret) {
@@ -43,6 +42,8 @@ fn handle_client(mut tcp_stream: TcpStream, secret_key: EphemeralSecret) {
     let key: chacha20poly1305::Key = *Key::from_slice(shared_secret.as_bytes());
     let cipher = ChaCha20Poly1305::new(&key);
     let nonce: Nonce = GenericArray::clone_from_slice(&msg_buf[0..12]);
+
+    println!("{:?}", &msg_buf[12..]);
 
     match read_size {
         Ok(size) => {

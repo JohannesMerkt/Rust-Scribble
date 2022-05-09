@@ -36,18 +36,21 @@ fn handle_client(mut tcp_stream: TcpStream, secret_key: EphemeralSecret) {
     let client_public: PublicKey = PublicKey::from(buffer);
     let shared_secret = secret_key.diffie_hellman(&client_public);
 
-    let mut msg_buf = [0; 1024];
-    let read_size = tcp_stream.read(&mut msg_buf);
+    let mut size = [0; 8];
+    let _ = tcp_stream.read_exact(&mut size);
+    let msg_size: usize = usize::from_le_bytes(size);
+    let mut msg_buf = vec![0; msg_size];
+    let read_size = tcp_stream.read_exact(&mut msg_buf);
 
     let key: chacha20poly1305::Key = *Key::from_slice(shared_secret.as_bytes());
     let cipher = ChaCha20Poly1305::new(&key);
     let nonce: Nonce = GenericArray::clone_from_slice(&msg_buf[0..12]);
 
-    println!("{:?}", &msg_buf[12..]);
+    println!("{:?}", &msg_buf[..]);
 
     match read_size {
-        Ok(size) => {
-            let ciphertext = &msg_buf[12..size];
+        Ok(_) => {
+            let ciphertext = &msg_buf[12..msg_size];
             println!("Ciphertext: {:?}", ciphertext);
             let recv_data: String = String::from_utf8(cipher.decrypt(&nonce, ciphertext).unwrap())
                 .expect("Invalid UTF-8 sequence");

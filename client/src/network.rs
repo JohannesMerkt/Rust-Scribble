@@ -37,9 +37,11 @@ pub fn send_chat_message(mut net_info: NetworkInfo, msg: &str) {
         .encrypt(nonce, json_message.dump().as_bytes())
         .expect("encryption failure!");
 
+    let msg_size = ciphertext.len() + 12;
     //prefix the nonce to the ciphertext
+    let _ = net_info.stream.write(&usize::to_le_bytes(msg_size));
     let _ = net_info.stream.write(nonce);
-    let _ = net_info.stream.write(ciphertext.as_ref());
+    let _ = net_info.stream.write(&ciphertext);
 }
 
 pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<NetworkInfo, Error> {

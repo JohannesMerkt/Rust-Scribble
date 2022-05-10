@@ -9,7 +9,7 @@ use std::io::{Error, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::thread;
 use std::thread::sleep;
-use x25519_dalek::{EphemeralSecret, PublicKey};
+use x25519_dalek::{EphemeralSecret, PublicKey};q
 
 pub struct NetworkInfo {
     username: String,
@@ -44,6 +44,11 @@ pub fn tcp_server() {
     }
 }
 
+fn handle_message(msg: json::JsonValue) {
+    //TODO Detect message type and handle accordingly
+    println!("{:?}", msg);
+}
+
 fn read_tcp_message(net_info: &mut NetworkInfo) {
     let mut size = [0; 8];
     let _ = net_info.tcp_stream.read_exact(&mut size);
@@ -66,7 +71,7 @@ fn read_tcp_message(net_info: &mut NetworkInfo) {
                 .expect("Invalid UTF-8 sequence");
             let json_message = json::parse(&recv_data).unwrap();
             println!("{}", json_message);
-            //handle_message(json_message);
+            handle_message(json_message);
         }
         Err(e) => println!("Error: {}", e),
     }
@@ -127,6 +132,7 @@ fn handle_client(mut tcp_stream: TcpStream, secret_key: EphemeralSecret) {
     };
 
     loop {
+        //TODO make async/await instead of polling
         send_game_state(&mut net_info);
         read_tcp_message(&mut net_info);
         sleep(std::time::Duration::from_secs(1));

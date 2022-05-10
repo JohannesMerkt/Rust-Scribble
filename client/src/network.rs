@@ -15,7 +15,7 @@ use x25519_dalek::{EphemeralSecret, PublicKey};
 pub struct NetworkInfo {
     username: String,
     tcp_stream: TcpStream,
-    shared_secret: Key,
+    key: Key,
 }
 
 fn generate_keypair() -> (PublicKey, EphemeralSecret) {
@@ -34,7 +34,7 @@ pub fn send_chat_message(mut net_info: NetworkInfo, msg: &str) {
         }
     };
 
-    let net_msg = encrypt_json(json_message, net_info.shared_secret);
+    let net_msg = encrypt_json(json_message, net_info.key);
     send_tcp_message(&mut net_info.tcp_stream, net_msg)
 }
 
@@ -75,7 +75,7 @@ fn read_tcp_message(net_info: &mut NetworkInfo) {
     let mut msg_buf = vec![0; msg_size];
     let read_size = net_info.tcp_stream.read_exact(&mut msg_buf);
 
-    let cipher = ChaCha20Poly1305::new(&net_info.shared_secret);
+    let cipher = ChaCha20Poly1305::new(&net_info.key);
     let nonce: Nonce = GenericArray::clone_from_slice(&msg_buf[0..12]);
 
     match read_size {
@@ -118,7 +118,7 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
         Ok(NetworkInfo {
             username: username.to_string(),
             tcp_stream,
-            shared_secret: key,
+            key,
         })
     } else {
         Err(Error::new(ErrorKind::Other, "Failed to connect to server"))

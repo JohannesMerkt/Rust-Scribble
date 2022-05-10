@@ -1,6 +1,5 @@
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
-use generic_array::GenericArray;
 use json::object;
 use json::JsonValue;
 use rand::Rng;
@@ -53,7 +52,6 @@ fn encrypt_json(json_message: JsonValue, shared_key: Key) -> (usize, Nonce, Vec<
         .expect("encryption failure!");
 
     let msg_size = ciphertext.len() + 12;
-    //prefix the nonce to the ciphertext
 
     (msg_size, nonce, ciphertext)
 }

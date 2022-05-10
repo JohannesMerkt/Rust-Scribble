@@ -2,6 +2,8 @@ use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use generic_array::GenericArray;
 use json::object;
+use json::JsonValue;
+use rand::Rng;
 use rand_core::OsRng;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::net::TcpStream;
@@ -12,7 +14,7 @@ use x25519_dalek::{EphemeralSecret, PublicKey};
 
 pub struct NetworkInfo {
     username: String,
-    stream: TcpStream,
+    tcp_stream: TcpStream,
     shared_secret: Key,
 }
 
@@ -27,35 +29,46 @@ pub fn send_chat_message(mut net_info: NetworkInfo, msg: &str) {
     let json_message = object! {
         code: 100,
         payload: {
-            username: net_info.username,
-            message: msg
+            user: "Bob",
+            message: msg.to_string(),
         }
     };
 
-    let nonce = Nonce::from_slice(b"Unique nonce");
-    let cipher = ChaCha20Poly1305::new(&net_info.shared_secret);
-
-    let ciphertext = cipher
-        .encrypt(nonce, json_message.dump().as_bytes())
-        .expect("encryption failure!");
-
-    let msg_size = ciphertext.len() + 12;
-    //prefix the nonce to the ciphertext
-    let _ = net_info.stream.write(&usize::to_le_bytes(msg_size));
-    let _ = net_info.stream.write(nonce);
-    let _ = net_info.stream.write(&ciphertext);
+    let net_msg = encrypt_json(json_message, net_info.shared_secret);
+    send_tcp_message(&mut net_info.tcp_stream, net_msg)
 }
 
 fn handle_message(msg: json::JsonValue) {
+    //TODO Detect message type and handle accordingly
     println!("{:?}", msg);
+}
+
+fn encrypt_json(json_message: JsonValue, shared_key: Key) -> (usize, Nonce, Vec<u8>) {
+    let nonce = *Nonce::from_slice(rand::thread_rng().gen::<[u8; 12]>().as_slice());
+    let cipher = ChaCha20Poly1305::new(&shared_key);
+
+    let ciphertext = cipher
+        .encrypt(&nonce, json_message.dump().as_bytes())
+        .expect("encryption failure!");
+
+    let msg_size = ciphertext.len() + 12;
+
+    (msg_size, nonce, ciphertext)
+}
+
+fn send_tcp_message(tcp_stream: &mut TcpStream, net_msg: (usize, Nonce, Vec<u8>)) {
+    //TODO send 1 message not 3
+    let _ = tcp_stream.write(&usize::to_le_bytes(net_msg.0));
+    let _ = tcp_stream.write(&net_msg.1);
+    let _ = tcp_stream.write(&net_msg.2);
 }
 
 fn read_tcp_message(net_info: &mut NetworkInfo) {
     let mut size = [0; 8];
-    let _ = net_info.stream.read_exact(&mut size);
+    let _ = net_info.tcp_stream.read_exact(&mut size);
     let msg_size: usize = usize::from_le_bytes(size);
     let mut msg_buf = vec![0; msg_size];
-    let read_size = net_info.stream.read_exact(&mut msg_buf);
+    let read_size = net_info.tcp_stream.read_exact(&mut msg_buf);
 
     let cipher = ChaCha20Poly1305::new(&net_info.shared_secret);
     let nonce: Nonce = GenericArray::clone_from_slice(&msg_buf[0..12]);
@@ -98,7 +111,7 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
 
         Ok(NetworkInfo {
             username: username.to_string(),
-            stream: tcp_stream,
+            tcp_stream,
             shared_secret: key,
         })
     } else {

@@ -25,7 +25,7 @@ fn generate_keypair() -> (PublicKey, EphemeralSecret) {
 }
 
 // Take message and assemble a json object to send to the server.
-pub fn send_chat_message(mut net_info: NetworkInfo, msg: &str) {
+pub fn send_chat_message(net_info: &mut NetworkInfo, msg: &str) {
     let json_message = object! {
         code: 100,
         payload: {
@@ -93,8 +93,8 @@ fn read_tcp_message(net_info: &mut NetworkInfo) {
 pub fn get_game_state(net_info: &mut NetworkInfo) {
     loop {
         read_tcp_message(net_info);
-
         sleep(Duration::from_millis(500));
+        send_chat_message(net_info, "Test Test message");
     }
 }
 

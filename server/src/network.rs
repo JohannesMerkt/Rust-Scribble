@@ -48,6 +48,11 @@ fn read_tcp_message(net_info: &mut NetworkInfo) {
     let mut size = [0; 8];
     let _ = net_info.tcp_stream.read_exact(&mut size);
     let msg_size: usize = usize::from_le_bytes(size);
+
+    if msg_size == 0 {
+        return;
+    }
+
     let mut msg_buf = vec![0; msg_size];
     let read_size = net_info.tcp_stream.read_exact(&mut msg_buf);
 
@@ -60,6 +65,7 @@ fn read_tcp_message(net_info: &mut NetworkInfo) {
             let recv_data: String = String::from_utf8(cipher.decrypt(&nonce, ciphertext).unwrap())
                 .expect("Invalid UTF-8 sequence");
             let json_message = json::parse(&recv_data).unwrap();
+            println!("{}", json_message);
             //handle_message(json_message);
         }
         Err(e) => println!("Error: {}", e),
@@ -122,6 +128,7 @@ fn handle_client(mut tcp_stream: TcpStream, secret_key: EphemeralSecret) {
 
     loop {
         send_game_state(&mut net_info);
+        read_tcp_message(&mut net_info);
         sleep(std::time::Duration::from_secs(1));
     }
 }

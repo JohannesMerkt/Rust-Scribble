@@ -1,5 +1,6 @@
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+use generic_array::GenericArray;
 use json::object;
 use json::JsonValue;
 use rand::Rng;
@@ -12,8 +13,8 @@ use x25519_dalek::{EphemeralSecret, PublicKey};
 
 pub struct NetworkInfo {
     username: String,
-    stream: TcpStream,
-    shared_secret: Key,
+    tcp_stream: TcpStream,
+    key: Key,
 }
 
 fn generate_keypair() -> (PublicKey, EphemeralSecret) {
@@ -40,6 +41,28 @@ pub fn tcp_server() {
             }
             Err(e) => println!("Error sending public key to {}: {}", addr, e),
         }
+    }
+}
+
+fn read_tcp_message(net_info: &mut NetworkInfo) {
+    let mut size = [0; 8];
+    let _ = net_info.tcp_stream.read_exact(&mut size);
+    let msg_size: usize = usize::from_le_bytes(size);
+    let mut msg_buf = vec![0; msg_size];
+    let read_size = net_info.tcp_stream.read_exact(&mut msg_buf);
+
+    let cipher = ChaCha20Poly1305::new(&net_info.key);
+    let nonce: Nonce = GenericArray::clone_from_slice(&msg_buf[0..12]);
+
+    match read_size {
+        Ok(_) => {
+            let ciphertext = &msg_buf[12..msg_size];
+            let recv_data: String = String::from_utf8(cipher.decrypt(&nonce, ciphertext).unwrap())
+                .expect("Invalid UTF-8 sequence");
+            let json_message = json::parse(&recv_data).unwrap();
+            //handle_message(json_message);
+        }
+        Err(e) => println!("Error: {}", e),
     }
 }
 
@@ -78,8 +101,8 @@ pub fn send_game_state(net_info: &mut NetworkInfo) {
         }
     };
 
-    let net_msg = encrypt_json(game_state, net_info.shared_secret);
-    send_tcp_message(&mut net_info.stream, net_msg);
+    let net_msg = encrypt_json(game_state, net_info.key);
+    send_tcp_message(&mut net_info.tcp_stream, net_msg);
 }
 
 fn handle_client(mut tcp_stream: TcpStream, secret_key: EphemeralSecret) {
@@ -93,8 +116,8 @@ fn handle_client(mut tcp_stream: TcpStream, secret_key: EphemeralSecret) {
     //TODO get username from client
     let mut net_info = NetworkInfo {
         username: "Bob".to_string(),
-        stream: tcp_stream,
-        shared_secret: key,
+        tcp_stream,
+        key,
     };
 
     loop {

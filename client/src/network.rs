@@ -67,6 +67,11 @@ fn read_tcp_message(net_info: &mut NetworkInfo) {
     let mut size = [0; 8];
     let _ = net_info.tcp_stream.read_exact(&mut size);
     let msg_size: usize = usize::from_le_bytes(size);
+
+    if msg_size == 0 {
+        return;
+    }
+
     let mut msg_buf = vec![0; msg_size];
     let read_size = net_info.tcp_stream.read_exact(&mut msg_buf);
 
@@ -88,6 +93,7 @@ fn read_tcp_message(net_info: &mut NetworkInfo) {
 pub fn get_game_state(net_info: &mut NetworkInfo) {
     loop {
         read_tcp_message(net_info);
+
         sleep(Duration::from_millis(500));
     }
 }

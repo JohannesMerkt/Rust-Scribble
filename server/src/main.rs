@@ -1,7 +1,9 @@
 mod gamestate;
 mod network;
-fn main() {
-    let mut global_state = gamestate::GameState::new();
 
-    network::tcp_server();
+use std::sync::Mutex;
+fn main() {
+    let mut game_state = Mutex::new(gamestate::GameState::new());
+
+    network::tcp_server(game_state);
 }

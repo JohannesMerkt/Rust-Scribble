@@ -7,9 +7,12 @@ use rand::Rng;
 use rand_core::OsRng;
 use std::io::{Error, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::sleep;
-use x25519_dalek::{EphemeralSecret, PublicKey};q
+use x25519_dalek::{EphemeralSecret, PublicKey};
+
+use crate::gamestate::GameState;
 
 pub struct NetworkInfo {
     username: String,
@@ -23,11 +26,15 @@ fn generate_keypair() -> (PublicKey, EphemeralSecret) {
     (public, secret)
 }
 
-pub fn tcp_server() {
+pub fn tcp_server(game_state: Mutex<GameState>) {
     let loopback = Ipv4Addr::new(127, 0, 0, 1);
     let socket = SocketAddrV4::new(loopback, 3000);
     let listener = TcpListener::bind(socket).unwrap();
     println!("Listening on {}, access this port to end the program", 3000);
+    {
+        game_state.lock().unwrap().add_player("Bob".to_string());
+    }
+    let global_gs = Arc::new(game_state);
 
     loop {
         //TODO accept connection and start a thread to handle it
@@ -37,19 +44,22 @@ pub fn tcp_server() {
 
         match tcp_stream.write_all(public_key.as_bytes()) {
             Ok(_) => {
-                thread::spawn(move || handle_client(tcp_stream, secret_key));
+                let thread_gs = Arc::clone(&global_gs);
+                thread::spawn(move || handle_client(tcp_stream, secret_key, thread_gs));
             }
             Err(e) => println!("Error sending public key to {}: {}", addr, e),
         }
     }
 }
 
-fn handle_message(msg: json::JsonValue) {
+fn handle_message(msg: json::JsonValue, game_state: &Arc<Mutex<GameState>>) {
     //TODO Detect message type and handle accordingly
     println!("{:?}", msg);
+    let mut new_state = game_state.lock().unwrap();
+    new_state.add_score("Bob".to_string(), 10);
 }
 
-fn read_tcp_message(net_info: &mut NetworkInfo) {
+fn read_tcp_message(net_info: &mut NetworkInfo, game_state: &Arc<Mutex<GameState>>) {
     let mut size = [0; 8];
     let _ = net_info.tcp_stream.read_exact(&mut size);
     let msg_size: usize = usize::from_le_bytes(size);
@@ -71,7 +81,7 @@ fn read_tcp_message(net_info: &mut NetworkInfo) {
                 .expect("Invalid UTF-8 sequence");
             let json_message = json::parse(&recv_data).unwrap();
             println!("{}", json_message);
-            handle_message(json_message);
+            handle_message(json_message, &game_state);
         }
         Err(e) => println!("Error: {}", e),
     }
@@ -97,7 +107,7 @@ fn send_tcp_message(tcp_stream: &mut TcpStream, net_msg: (usize, Nonce, Vec<u8>)
     let _ = tcp_stream.write(&net_msg.2);
 }
 
-pub fn send_game_state(net_info: &mut NetworkInfo) {
+pub fn send_game_state(net_info: &mut NetworkInfo, game_state: &Arc<Mutex<GameState>>) {
     //TODO get shared game state (don't create it here)
     let game_state = object! {
         code: 100,
@@ -116,7 +126,11 @@ pub fn send_game_state(net_info: &mut NetworkInfo) {
     send_tcp_message(&mut net_info.tcp_stream, net_msg);
 }
 
-fn handle_client(mut tcp_stream: TcpStream, secret_key: EphemeralSecret) {
+fn handle_client(
+    mut tcp_stream: TcpStream,
+    secret_key: EphemeralSecret,
+    game_state: Arc<Mutex<GameState>>,
+) {
     let mut buffer = [0; 32];
     let _ = tcp_stream.read(&mut buffer);
 
@@ -133,8 +147,10 @@ fn handle_client(mut tcp_stream: TcpStream, secret_key: EphemeralSecret) {
 
     loop {
         //TODO make async/await instead of polling
-        send_game_state(&mut net_info);
-        read_tcp_message(&mut net_info);
+        send_game_state(&mut net_info, &game_state);
+        read_tcp_message(&mut net_info, &game_state);
         sleep(std::time::Duration::from_secs(1));
+        //print the gamestate
+        println!("{:?}", game_state.lock().unwrap().to_string());
     }
 }

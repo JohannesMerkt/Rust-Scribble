@@ -1,10 +1,9 @@
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use generic_array::GenericArray;
-use json::object;
-use json::JsonValue;
 use rand::Rng;
 use rand_core::OsRng;
+use serde_json::{json, Value};
 use std::io::{Error, ErrorKind, Read, Write};
 use std::net::TcpStream;
 use std::str;
@@ -26,29 +25,32 @@ fn generate_keypair() -> (PublicKey, EphemeralSecret) {
 
 // Take message and assemble a json object to send to the server.
 pub fn send_chat_message(net_info: &mut NetworkInfo, msg: &str) {
-    let json_message = object! {
-        code: 100,
-        payload: {
-            user: "Bob",
-            message: msg.to_string(),
+    let json_message = json!({
+        "code": 100,
+        "payload": {
+            "user": "Bob",
+            "message": msg.to_string(),
         }
-    };
+    });
 
     let net_msg = encrypt_json(json_message, net_info.key);
     send_tcp_message(&mut net_info.tcp_stream, net_msg)
 }
 
-fn handle_message(msg: json::JsonValue) {
+fn handle_message(msg: serde_json::Value) {
     //TODO Detect message type and handle accordingly
     println!("{:?}", msg);
 }
 
-fn encrypt_json(json_message: JsonValue, shared_key: Key) -> (usize, Nonce, Vec<u8>) {
+fn encrypt_json(json_message: Value, shared_key: Key) -> (usize, Nonce, Vec<u8>) {
     let nonce = *Nonce::from_slice(rand::thread_rng().gen::<[u8; 12]>().as_slice());
     let cipher = ChaCha20Poly1305::new(&shared_key);
 
     let ciphertext = cipher
-        .encrypt(&nonce, json_message.dump().as_bytes())
+        .encrypt(
+            &nonce,
+            serde_json::to_string(&json_message).unwrap().as_bytes(),
+        )
         .expect("encryption failure!");
 
     let msg_size = ciphertext.len() + 12;
@@ -83,7 +85,7 @@ fn read_tcp_message(net_info: &mut NetworkInfo) {
             let ciphertext = &msg_buf[12..msg_size];
             let recv_data: String = String::from_utf8(cipher.decrypt(&nonce, ciphertext).unwrap())
                 .expect("Invalid UTF-8 sequence");
-            let json_message = json::parse(&recv_data).unwrap();
+            let json_message = serde_json::from_str(&recv_data).unwrap();
             handle_message(json_message);
         }
         Err(e) => println!("Error: {}", e),
@@ -111,6 +113,7 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
         let _ = tcp_stream.read(&mut buffer)?;
         let server_key: PublicKey = PublicKey::from(buffer);
         tcp_stream.write_all(public_key.as_bytes())?;
+        tcp_stream.write_all(username.as_bytes())?;
 
         let shared_secret = secret_key.diffie_hellman(&server_key);
         let key: chacha20poly1305::Key = *Key::from_slice(shared_secret.as_bytes());

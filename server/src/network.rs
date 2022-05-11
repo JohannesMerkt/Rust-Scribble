@@ -1,11 +1,11 @@
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use generic_array::GenericArray;
-use json::object;
-use json::JsonValue;
 use rand::Rng;
 use rand_core::OsRng;
-use std::io::{Error, Read, Write};
+use serde::{Deserialize, Serialize};
+use serde_json::Result;
+use std::io::{BufRead, BufReader, Error, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -31,9 +31,7 @@ pub fn tcp_server(game_state: Mutex<GameState>) {
     let socket = SocketAddrV4::new(loopback, 3000);
     let listener = TcpListener::bind(socket).unwrap();
     println!("Listening on {}, access this port to end the program", 3000);
-    {
-        game_state.lock().unwrap().add_player("Bob".to_string());
-    }
+
     let global_gs = Arc::new(game_state);
 
     loop {
@@ -87,12 +85,12 @@ fn read_tcp_message(net_info: &mut NetworkInfo, game_state: &Arc<Mutex<GameState
     }
 }
 
-fn encrypt_json(json_message: JsonValue, shared_key: Key) -> (usize, Nonce, Vec<u8>) {
+fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8>) {
     let nonce = *Nonce::from_slice(rand::thread_rng().gen::<[u8; 12]>().as_slice());
     let cipher = ChaCha20Poly1305::new(&shared_key);
 
     let ciphertext = cipher
-        .encrypt(&nonce, json_message.dump().as_bytes())
+        .encrypt(&nonce, &json_message[..])
         .expect("encryption failure!");
 
     let msg_size = ciphertext.len() + 12;
@@ -109,20 +107,11 @@ fn send_tcp_message(tcp_stream: &mut TcpStream, net_msg: (usize, Nonce, Vec<u8>)
 
 pub fn send_game_state(net_info: &mut NetworkInfo, game_state: &Arc<Mutex<GameState>>) {
     //TODO get shared game state (don't create it here)
-    let game_state = object! {
-        code: 100,
-        payload: {
-            users: {
-                "Bob": 10,
-                "Sally": 0,
-                "Alice": 10
-            },
-            turn: "Bob",
-            image:[[10, 5],[11, 5],[12, 5]]
-        }
-    };
 
-    let net_msg = encrypt_json(game_state, net_info.key);
+    let new_state = game_state.lock().unwrap();
+    let json_gs = serde_json::to_vec(&*new_state).expect("Failed to serialize game state");
+    let net_msg = encrypt_json(json_gs, net_info.key);
+
     send_tcp_message(&mut net_info.tcp_stream, net_msg);
 }
 
@@ -131,8 +120,14 @@ fn handle_client(
     secret_key: EphemeralSecret,
     game_state: Arc<Mutex<GameState>>,
 ) {
+    //TODO unsafe code, don't depend on fixed length buffers
     let mut buffer = [0; 32];
     let _ = tcp_stream.read(&mut buffer);
+
+    //Get username from client
+    let mut conn = BufReader::new(&tcp_stream);
+    let mut username = String::new();
+    let _ = conn.read_line(&mut username);
 
     let client_public: PublicKey = PublicKey::from(buffer);
     let shared_secret = secret_key.diffie_hellman(&client_public);
@@ -140,10 +135,16 @@ fn handle_client(
 
     //TODO get username from client
     let mut net_info = NetworkInfo {
-        username: "Bob".to_string(),
+        username,
         tcp_stream,
         key,
     };
+
+    {
+        let username = net_info.username.clone();
+        let mut game_state = game_state.lock().unwrap();
+        game_state.add_player(username);
+    }
 
     loop {
         //TODO make async/await instead of polling

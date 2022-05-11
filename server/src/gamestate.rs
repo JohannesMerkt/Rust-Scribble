@@ -1,10 +1,24 @@
-use colored::Color;
+use serde::{Deserialize, Serialize};
 
-struct Board {
-    //A vector of pixels/color that represent what has been drawn on the board.
-    board: Vec<((i32, i32), Color)>,
+#[derive(Serialize, Deserialize)]
+struct Point {
+    x: i32,
+    y: i32,
 }
 
+#[derive(Serialize, Deserialize)]
+struct Color {
+    r: u8,
+    g: u8,
+    b: u8,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Board {
+    //A vector of pixels/color that represent what has been drawn on the board.
+    board: Vec<(Point, Color)>,
+}
+#[derive(Serialize, Deserialize)]
 pub struct GameState {
     //Username of the player and score
     users: Vec<(String, i32)>,
@@ -73,10 +87,12 @@ impl GameState {
     }
 
     pub fn add_to_board(&mut self, x: i32, y: i32, color: Color) {
-        self.board.board.push(((x, y), color));
+        self.board.board.push((Point { x, y }, color));
     }
 
     pub fn remove_from_board(&mut self, x: i32, y: i32) {
-        self.board.board.retain(|&((x_, y_), _)| x_ != x || y_ != y);
+        self.board
+            .board
+            .retain(|&(ref point, _)| point.x != x || point.y != y);
     }
 }

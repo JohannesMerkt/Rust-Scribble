@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-struct Point {
+pub struct Point {
     x: i32,
     y: i32,
 }
 
 #[derive(Serialize, Deserialize)]
-struct Color {
+pub struct Color {
     r: u8,
     g: u8,
     b: u8,

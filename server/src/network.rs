@@ -130,6 +130,24 @@ fn send_game_state(
     send_tcp_message(&mut net_info.tcp_stream, net_msg)
 }
 
+fn get_user_init(tcp_stream: &mut TcpStream) -> (String, PublicKey) {
+    let mut buf = String::new();
+    let _ = tcp_stream.read_to_string(&mut buf);
+
+    let json_message = json::parse(&buf).unwrap();
+    let username = json_message["username"].as_str().unwrap();
+    let public_key: [u8; 32] = json_message["public_key"]
+        .as_str()
+        .unwrap()
+        .as_bytes()
+        .try_into()
+        .unwrap();
+
+    (username.to_string(), PublicKey::from(public_key))
+}
+
+//TODO reduce code complexity
+//Break this into smaller functions
 fn handle_client(
     mut tcp_stream: TcpStream,
     secret_key: EphemeralSecret,
@@ -140,11 +158,8 @@ fn handle_client(
     let _ = tcp_stream.read(&mut buffer);
 
     //TODO First message should be a user initialization message
-    let mut conn = BufReader::new(&tcp_stream);
-    let mut username = String::new();
-    let _ = conn.read_line(&mut username);
+    let (username, client_public) = get_user_init(&mut tcp_stream);
 
-    let client_public: PublicKey = PublicKey::from(buffer);
     let shared_secret = secret_key.diffie_hellman(&client_public);
     let key: chacha20poly1305::Key = *Key::from_slice(shared_secret.as_bytes());
 

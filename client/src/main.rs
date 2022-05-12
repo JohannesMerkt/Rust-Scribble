@@ -1,8 +1,8 @@
 mod gamestate;
+mod messages;
 mod network;
 
 use std::io;
-
 
 fn main() {
     let mut user_input = String::new();

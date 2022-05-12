@@ -5,11 +5,12 @@ use rand::Rng;
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_json::Result;
-use std::io::{BufRead, BufReader, Error, Read, Write};
+use std::io::{self, BufRead, BufReader, Error, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::sleep;
+use std::time::Duration;
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
 use crate::gamestate::GameState;
@@ -53,8 +54,6 @@ pub fn tcp_server(game_state: Mutex<GameState>) {
 fn handle_message(msg: json::JsonValue, game_state: &Arc<Mutex<GameState>>) {
     //TODO Detect message type and handle accordingly
     println!("{:?}", msg);
-    let mut new_state = game_state.lock().unwrap();
-    new_state.add_score("Bob".to_string(), 10);
 }
 
 fn read_tcp_message(net_info: &mut NetworkInfo, game_state: &Arc<Mutex<GameState>>) {
@@ -78,7 +77,6 @@ fn read_tcp_message(net_info: &mut NetworkInfo, game_state: &Arc<Mutex<GameState
             let recv_data: String = String::from_utf8(cipher.decrypt(&nonce, ciphertext).unwrap())
                 .expect("Invalid UTF-8 sequence");
             let json_message = json::parse(&recv_data).unwrap();
-            println!("{}", json_message);
             handle_message(json_message, &game_state);
         }
         Err(e) => println!("Error: {}", e),
@@ -98,21 +96,38 @@ fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8
     (msg_size, nonce, ciphertext)
 }
 
-fn send_tcp_message(tcp_stream: &mut TcpStream, net_msg: (usize, Nonce, Vec<u8>)) {
-    //TODO send 1 message not 3
-    let _ = tcp_stream.write(&usize::to_le_bytes(net_msg.0));
-    let _ = tcp_stream.write(&net_msg.1);
-    let _ = tcp_stream.write(&net_msg.2);
+fn client_disconnected(net_info: &mut NetworkInfo, game_state: &Arc<Mutex<GameState>>) {
+    println!("Client {:?} disconnected", net_info.username);
+    let mut game_state = game_state.lock().unwrap();
+    game_state.remove_player(net_info.username.to_string());
 }
 
-pub fn send_game_state(net_info: &mut NetworkInfo, game_state: &Arc<Mutex<GameState>>) {
+fn send_tcp_message(
+    tcp_stream: &mut TcpStream,
+    net_msg: (usize, Nonce, Vec<u8>),
+) -> io::Result<()> {
+    //TODO send 1 message not 3
+    let res = tcp_stream.write(&usize::to_le_bytes(net_msg.0));
+    let _ = tcp_stream.write(&net_msg.1);
+    let _ = tcp_stream.write(&net_msg.2);
+
+    match res {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+fn send_game_state(
+    net_info: &mut NetworkInfo,
+    game_state: &Arc<Mutex<GameState>>,
+) -> io::Result<()> {
     //TODO get shared game state (don't create it here)
 
     let new_state = game_state.lock().unwrap();
     let json_gs = serde_json::to_vec(&*new_state).expect("Failed to serialize game state");
     let net_msg = encrypt_json(json_gs, net_info.key);
 
-    send_tcp_message(&mut net_info.tcp_stream, net_msg);
+    send_tcp_message(&mut net_info.tcp_stream, net_msg)
 }
 
 fn handle_client(
@@ -124,7 +139,7 @@ fn handle_client(
     let mut buffer = [0; 32];
     let _ = tcp_stream.read(&mut buffer);
 
-    //Get username from client
+    //TODO First message should be a user initialization message
     let mut conn = BufReader::new(&tcp_stream);
     let mut username = String::new();
     let _ = conn.read_line(&mut username);
@@ -133,7 +148,6 @@ fn handle_client(
     let shared_secret = secret_key.diffie_hellman(&client_public);
     let key: chacha20poly1305::Key = *Key::from_slice(shared_secret.as_bytes());
 
-    //TODO get username from client
     let mut net_info = NetworkInfo {
         username,
         tcp_stream,
@@ -148,10 +162,14 @@ fn handle_client(
 
     loop {
         //TODO make async/await instead of polling
-        send_game_state(&mut net_info, &game_state);
+        let res = send_game_state(&mut net_info, &game_state);
         read_tcp_message(&mut net_info, &game_state);
-        sleep(std::time::Duration::from_secs(1));
+        if res.is_err() {
+            client_disconnected(&mut net_info, &game_state);
+            break;
+        }
         //print the gamestate
         println!("{:?}", game_state.lock().unwrap().to_string());
+        sleep(Duration::from_millis(500));
     }
 }

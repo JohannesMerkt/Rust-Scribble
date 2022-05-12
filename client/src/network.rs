@@ -11,8 +11,6 @@ use std::thread::sleep;
 use std::time::Duration;
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
-use crate::messages::*;
-
 pub struct NetworkInfo {
     username: String,
     tcp_stream: TcpStream,
@@ -27,25 +25,16 @@ fn generate_keypair() -> (PublicKey, EphemeralSecret) {
 
 // Take message and assemble a json object to send to the server.
 pub fn send_chat_message(net_info: &mut NetworkInfo, msg: &str) {
-    let mut msg_json = json!({
-        "type": "chat",
-        "message": msg,
+    let json_message = json!({
+        "code": 100,
+        "payload": {
+            "user": "Bob",
+            "message": msg.to_string(),
+        }
     });
-    let net_msg = encrypt_json(msg_json, net_info.key);
+
+    let net_msg = encrypt_json(json_message, net_info.key);
     send_tcp_message(&mut net_info.tcp_stream, net_msg)
-}
-
-fn send_user_initialization(net_info: &mut NetworkInfo, pub_key: &PublicKey) {
-    let msg_json = json!({
-        "type": "user_initialization",
-        "username": net_info.username,
-        "public_key": pub_key.to_bytes().to_vec(),
-    });
-
-    net_info
-        .tcp_stream
-        .write_all(msg_json.to_string().as_bytes())
-        .unwrap();
 }
 
 fn handle_message(msg: serde_json::Value) {
@@ -104,9 +93,11 @@ fn read_tcp_message(net_info: &mut NetworkInfo) {
 }
 
 pub fn get_game_state(net_info: &mut NetworkInfo) {
-    read_tcp_message(net_info);
-    sleep(Duration::from_millis(500));
-    send_chat_message(net_info, "Test Test message");
+    loop {
+        read_tcp_message(net_info);
+        sleep(Duration::from_millis(500));
+        send_chat_message(net_info, "Test Test message");
+    }
 }
 
 pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<NetworkInfo, Error> {
@@ -121,19 +112,17 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
         let mut buffer = [0; 32];
         let _ = tcp_stream.read(&mut buffer)?;
         let server_key: PublicKey = PublicKey::from(buffer);
+        tcp_stream.write_all(public_key.as_bytes())?;
+        tcp_stream.write_all(username.as_bytes())?;
 
         let shared_secret = secret_key.diffie_hellman(&server_key);
         let key: chacha20poly1305::Key = *Key::from_slice(shared_secret.as_bytes());
 
-        let mut net_info = NetworkInfo {
+        Ok(NetworkInfo {
             username: username.to_string(),
             tcp_stream,
             key,
-        };
-
-        send_user_initialization(&mut net_info, &public_key);
-
-        Ok(net_info)
+        })
     } else {
         Err(Error::new(ErrorKind::Other, "Failed to connect to server"))
     }

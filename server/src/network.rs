@@ -4,7 +4,7 @@ use generic_array::GenericArray;
 use rand::Rng;
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
-use serde_json::Result;
+use serde_json::{Result, Value};
 use std::io::{self, BufRead, BufReader, Error, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
@@ -31,12 +31,12 @@ pub fn tcp_server(game_state: Mutex<GameState>) {
     let loopback = Ipv4Addr::new(127, 0, 0, 1);
     let socket = SocketAddrV4::new(loopback, 3000);
     let listener = TcpListener::bind(socket).unwrap();
+    let global_gs = Arc::new(game_state);
+    let mut global_net_infos = Vec::new();
+
     println!("Listening on {}, access this port to end the program", 3000);
 
-    let global_gs = Arc::new(game_state);
-
     loop {
-        //TODO accept connection and start a thread to handle it
         let (public_key, secret_key) = generate_keypair();
         let (mut tcp_stream, addr) = listener.accept().unwrap();
         println!("Connection received! {:?} is Connected.", addr);

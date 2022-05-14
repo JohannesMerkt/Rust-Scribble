@@ -26,11 +26,9 @@ fn generate_keypair() -> (PublicKey, EphemeralSecret) {
 // Take message and assemble a json object to send to the server.
 pub fn send_chat_message(net_info: &mut NetworkInfo, msg: &str) {
     let json_message = json!({
-        "code": 100,
-        "payload": {
-            "user": "Bob",
+        "type": "chat_message",
+            "user": "Spezi",
             "message": msg.to_string(),
-        }
     });
 
     let net_msg = encrypt_json(json_message, net_info.key);

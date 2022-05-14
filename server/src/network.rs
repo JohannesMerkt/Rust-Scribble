@@ -32,7 +32,7 @@ pub fn tcp_server(game_state: Mutex<GameState>) {
     let socket = SocketAddrV4::new(loopback, 3000);
     let listener = TcpListener::bind(socket).unwrap();
     let global_gs = Arc::new(game_state);
-    let mut global_net_infos = Vec::new();
+    //let mut global_net_infos = Vec::new();
 
     println!("Listening on {}, access this port to end the program", 3000);
 

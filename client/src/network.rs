@@ -27,7 +27,7 @@ fn generate_keypair() -> (PublicKey, EphemeralSecret) {
 pub fn send_chat_message(net_info: &mut NetworkInfo, msg: &str) {
     let json_message = json!({
         "type": "chat_message",
-            "user": "Spezi",
+            "user": net_info.username.clone(),
             "message": msg.to_string(),
     });
 
@@ -93,7 +93,7 @@ fn read_tcp_message(net_info: &mut NetworkInfo) {
 pub fn get_game_state(net_info: &mut NetworkInfo) {
     loop {
         read_tcp_message(net_info);
-        sleep(Duration::from_millis(500));
+        sleep(Duration::from_millis(1000));
         send_chat_message(net_info, "Test Test message");
     }
 }

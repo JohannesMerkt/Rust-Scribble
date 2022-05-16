@@ -1,17 +1,17 @@
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use generic_array::GenericArray;
+use json::JsonValue;
 use rand::Rng;
 use rand_core::OsRng;
-use serde::{Deserialize, Serialize};
-use serde_json::{Result, Value};
-use std::io::{self, BufRead, BufReader, Error, Read, Write};
+use std::collections::VecDeque;
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
-use x25519_dalek::{EphemeralSecret, PublicKey};
+use x25519_dalek::{PublicKey, ReusableSecret};
 
 use crate::gamestate::GameState;
 
@@ -19,10 +19,11 @@ pub struct NetworkInfo {
     username: String,
     tcp_stream: TcpStream,
     key: Key,
+    secret_key: ReusableSecret,
 }
 
-fn generate_keypair() -> (PublicKey, EphemeralSecret) {
-    let secret = EphemeralSecret::new(OsRng);
+fn generate_keypair() -> (PublicKey, ReusableSecret) {
+    let secret = ReusableSecret::new(OsRng);
     let public = PublicKey::from(&secret);
     (public, secret)
 }
@@ -32,9 +33,18 @@ pub fn tcp_server(game_state: Mutex<GameState>) {
     let socket = SocketAddrV4::new(loopback, 3000);
     let listener = TcpListener::bind(socket).unwrap();
     let global_gs = Arc::new(game_state);
-    //let mut global_net_infos = Vec::new();
 
-    println!("Listening on {}, access this port to end the program", 3000);
+    println!("Listening on {}", socket);
+
+    let mut global_net_infos: Vec<Arc<Mutex<NetworkInfo>>> = Vec::new();
+    let broadcast_queue: Arc<Mutex<VecDeque<JsonValue>>> = Arc::new(Mutex::new(VecDeque::new()));
+
+    //Spin off a thread to wait for broadcast messages and send them to all clients
+    let arc_queue = Arc::clone(&broadcast_queue);
+    let arc_net_infos = Arc::new(Mutex::new(global_net_infos));
+    let net_infos = Arc::clone(&arc_net_infos);
+
+    thread::spawn(move || check_send_broadcast_messages(&net_infos, &arc_queue));
 
     loop {
         let (public_key, secret_key) = generate_keypair();
@@ -43,26 +53,107 @@ pub fn tcp_server(game_state: Mutex<GameState>) {
 
         match tcp_stream.write_all(public_key.as_bytes()) {
             Ok(_) => {
+                let net_info = Mutex::new(NetworkInfo {
+                    username: "".to_string(),
+                    tcp_stream,
+                    key: *Key::from_slice(public_key.as_bytes()),
+                    secret_key,
+                });
+
                 let thread_gs = Arc::clone(&global_gs);
-                thread::spawn(move || handle_client(tcp_stream, secret_key, thread_gs));
+                let arc_net_info = Arc::new(net_info);
+                let thread_net_info = Arc::clone(&arc_net_info);
+
+                let thread_broadcast_queue = Arc::clone(&broadcast_queue);
+                let thread_net_infos = Arc::clone(&arc_net_infos);
+
+                let glb_cp_net_info = Arc::clone(&arc_net_info);
+                thread_net_infos.lock().unwrap().push(glb_cp_net_info);
+
+                thread::spawn(move || {
+                    handle_client(thread_net_info, thread_broadcast_queue, thread_gs)
+                });
             }
             Err(e) => println!("Error sending public key to {}: {}", addr, e),
         }
     }
 }
 
-fn handle_message(msg: json::JsonValue, game_state: &Arc<Mutex<GameState>>) {
-    //TODO Detect message type and handle accordingly
-    println!("{:?}", msg);
+fn handle_message(
+    msg: json::JsonValue,
+    broadcast_queue: &Arc<Mutex<VecDeque<JsonValue>>>,
+    game_state: &Arc<Mutex<GameState>>,
+) {
+    //add to broadcast queue
+    println!("Msg RCV: {:?}", msg);
+
+    match msg["type"].as_str() {
+        Some("chat_message") => add_broadcast_message(msg, broadcast_queue),
+        Some("guess") => println!(
+            "User {}: guessed {}",
+            msg["username"].as_str().unwrap(),
+            msg["guess"].as_str().unwrap() //TODO check gamestate
+        ),
+        _ => println!("{:?}", msg),
+    }
 }
 
-fn read_tcp_message(net_info: &mut NetworkInfo, game_state: &Arc<Mutex<GameState>>) {
+fn add_broadcast_message(msg: JsonValue, broadcast_queue: &Arc<Mutex<VecDeque<JsonValue>>>) {
+    let mut broadcast_queue = broadcast_queue.lock().unwrap();
+    println!("Adding to broadcast queue");
+    broadcast_queue.push_back(msg);
+}
+
+fn check_send_broadcast_messages(
+    net_infos: &Arc<Mutex<Vec<Arc<Mutex<NetworkInfo>>>>>,
+    broadcast_queue: &Arc<Mutex<VecDeque<JsonValue>>>,
+) {
+    loop {
+        let mut broadcast_msg: Option<JsonValue> = None;
+        {
+            println!("Getting Broadcast lock");
+            let mut broadcast_queue = broadcast_queue.lock().unwrap();
+            println!("Got Broadcast lock");
+            if broadcast_queue.len() > 0 {
+                println!("Broadcasting message");
+                broadcast_msg = Some(broadcast_queue.pop_front().unwrap());
+            }
+        }
+
+        match broadcast_msg {
+            Some(msg) => {
+                println!("Sending broadcast message {:?}", msg);
+                match net_infos.try_lock() {
+                    Ok(mut net_infos) => {
+                        for net_info in net_infos.iter_mut() {
+                            let net_info = net_info.try_lock();
+                            match net_info {
+                                Ok(mut net_info) => {
+                                    let _ = send_message(&mut net_info, &msg);
+                                }
+                                Err(_) => {
+                                    println!("Could not lock net_info");
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("Error getting net_infos lock: {}", e);
+                    }
+                }
+            }
+            None => {}
+        }
+    }
+}
+
+fn read_tcp_message(net_info: &mut NetworkInfo) -> Option<JsonValue> {
     let mut size = [0; 8];
     let _ = net_info.tcp_stream.read_exact(&mut size);
     let msg_size: usize = usize::from_le_bytes(size);
 
     if msg_size == 0 {
-        return;
+        return None;
     }
 
     let mut msg_buf = vec![0; msg_size];
@@ -76,10 +167,9 @@ fn read_tcp_message(net_info: &mut NetworkInfo, game_state: &Arc<Mutex<GameState
             let ciphertext = &msg_buf[12..msg_size];
             let recv_data: String = String::from_utf8(cipher.decrypt(&nonce, ciphertext).unwrap())
                 .expect("Invalid UTF-8 sequence");
-            let json_message = json::parse(&recv_data).unwrap();
-            handle_message(json_message, &game_state);
+            Some(json::parse(&recv_data).unwrap())
         }
-        Err(e) => println!("Error: {}", e),
+        Err(e) => None,
     }
 }
 
@@ -117,12 +207,17 @@ fn send_tcp_message(
     }
 }
 
+fn send_message(net_info: &mut NetworkInfo, msg: &JsonValue) -> io::Result<()> {
+    let json_message = msg.to_string();
+    let (msg_size, nonce, ciphertext) = encrypt_json(json_message.into_bytes(), net_info.key);
+    let mut net_msg = (msg_size, nonce, ciphertext);
+    send_tcp_message(&mut net_info.tcp_stream, net_msg)
+}
+
 fn send_game_state(
     net_info: &mut NetworkInfo,
     game_state: &Arc<Mutex<GameState>>,
 ) -> io::Result<()> {
-    //TODO get shared game state (don't create it here)
-
     let new_state = game_state.lock().unwrap();
     let json_gs = serde_json::to_vec(&*new_state).expect("Failed to serialize game state");
     let net_msg = encrypt_json(json_gs, net_info.key);
@@ -131,45 +226,59 @@ fn send_game_state(
 }
 
 fn handle_client(
-    mut tcp_stream: TcpStream,
-    secret_key: EphemeralSecret,
+    net_info: Arc<Mutex<NetworkInfo>>,
+    broadcast_queue: Arc<Mutex<VecDeque<JsonValue>>>,
     game_state: Arc<Mutex<GameState>>,
 ) {
-    //TODO unsafe code, don't depend on fixed length buffers
-    let mut buffer = [0; 32];
-    let _ = tcp_stream.read(&mut buffer);
-
-    //TODO First message should be a user initialization message
-    let mut conn = BufReader::new(&tcp_stream);
-    let mut username = String::new();
-    let _ = conn.read_line(&mut username);
-
-    let client_public: PublicKey = PublicKey::from(buffer);
-    let shared_secret = secret_key.diffie_hellman(&client_public);
-    let key: chacha20poly1305::Key = *Key::from_slice(shared_secret.as_bytes());
-
-    let mut net_info = NetworkInfo {
-        username,
-        tcp_stream,
-        key,
-    };
-
     {
-        let username = net_info.username.clone();
-        let mut game_state = game_state.lock().unwrap();
-        game_state.add_player(username);
+        let mut net_info = net_info.lock().unwrap();
+
+        let mut buffer = [0; 32];
+        let _ = net_info.tcp_stream.read(&mut buffer);
+
+        //TODO First message should be a user initialization message
+        let mut conn = BufReader::new(&net_info.tcp_stream);
+        let mut username = String::new();
+        let _ = conn.read_line(&mut username);
+
+        net_info.username = username.trim().to_string();
+
+        let client_public: PublicKey = PublicKey::from(buffer);
+        let shared_secret = net_info.secret_key.diffie_hellman(&client_public);
+        net_info.key = *Key::from_slice(shared_secret.as_bytes());
+
+        {
+            let username = net_info.username.clone();
+            let mut game_state = game_state.lock().unwrap();
+            game_state.add_player(username);
+        }
     }
 
     loop {
         //TODO make async/await instead of polling
-        let res = send_game_state(&mut net_info, &game_state);
-        read_tcp_message(&mut net_info, &game_state);
-        if res.is_err() {
-            client_disconnected(&mut net_info, &game_state);
-            break;
+        let rcv_msg: Option<JsonValue>;
+
+        {
+            let mut net_info = net_info.lock().unwrap();
+            let res = send_game_state(&mut net_info, &game_state);
+            if res.is_err() {
+                client_disconnected(&mut net_info, &game_state);
+                break;
+            }
         }
-        //print the gamestate
-        println!("{:?}", game_state.lock().unwrap().to_string());
+
+        {
+            let mut net_info = net_info.lock().unwrap();
+            rcv_msg = read_tcp_message(&mut net_info);
+        }
+
+        match rcv_msg {
+            Some(msg) => {
+                handle_message(msg, &broadcast_queue, &game_state);
+            }
+            _ => {}
+        }
+
         sleep(Duration::from_millis(500));
     }
 }

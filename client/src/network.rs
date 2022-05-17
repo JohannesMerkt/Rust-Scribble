@@ -4,10 +4,10 @@ use generic_array::GenericArray;
 use rand::Rng;
 use rand_core::OsRng;
 use serde_json::{json, Value};
+use std::error;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::net::TcpStream;
 use std::str;
-use std::thread::sleep;
 use std::time::Duration;
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
@@ -24,7 +24,7 @@ fn generate_keypair() -> (PublicKey, EphemeralSecret) {
 }
 
 // Take message and assemble a json object to send to the server.
-pub fn send_chat_message(net_info: &mut NetworkInfo, msg: &str) {
+pub fn send_chat_message(net_info: &mut NetworkInfo, msg: &str) -> Result<(), Error> {
     let json_message = json!({
         "type": "chat_message",
             "user": net_info.username.clone(),
@@ -56,50 +56,44 @@ fn encrypt_json(json_message: Value, shared_key: Key) -> (usize, Nonce, Vec<u8>)
     (msg_size, nonce, ciphertext)
 }
 
-fn send_tcp_message(tcp_stream: &mut TcpStream, net_msg: (usize, Nonce, Vec<u8>)) {
+fn send_tcp_message(
+    tcp_stream: &mut TcpStream,
+    net_msg: (usize, Nonce, Vec<u8>),
+) -> Result<(), Error> {
     //TODO send 1 message not 3
-    let _ = tcp_stream.write(&usize::to_le_bytes(net_msg.0));
-    let _ = tcp_stream.write(&net_msg.1);
-    let _ = tcp_stream.write(&net_msg.2);
+    tcp_stream.write(&usize::to_le_bytes(net_msg.0))?;
+    tcp_stream.write(&net_msg.1)?;
+    tcp_stream.write(&net_msg.2)?;
+    Ok(())
 }
 
-fn read_tcp_message(net_info: &mut NetworkInfo) {
+pub fn read_tcp_message(
+    net_info: &mut NetworkInfo,
+) -> Result<serde_json::Value, Box<dyn error::Error>> {
+    let json_message;
     let mut size = [0; 8];
-    let _ = net_info.tcp_stream.read_exact(&mut size);
+    net_info.tcp_stream.read_exact(&mut size)?;
     let msg_size: usize = usize::from_le_bytes(size);
 
-    if msg_size == 0 {
-        return;
-    }
-
     let mut msg_buf = vec![0; msg_size];
-    let read_size = net_info.tcp_stream.read_exact(&mut msg_buf);
+    net_info.tcp_stream.read_exact(&mut msg_buf)?;
 
     let cipher = ChaCha20Poly1305::new(&net_info.key);
     let nonce: Nonce = GenericArray::clone_from_slice(&msg_buf[0..12]);
 
-    match read_size {
-        Ok(_) => {
-            let ciphertext = &msg_buf[12..msg_size];
-            let recv_data: String = String::from_utf8(cipher.decrypt(&nonce, ciphertext).unwrap())
-                .expect("Invalid UTF-8 sequence");
-            let json_message = serde_json::from_str(&recv_data).unwrap();
-            handle_message(json_message);
-        }
-        Err(e) => println!("Error: {}", e),
-    }
-}
+    let ciphertext = &msg_buf[12..msg_size];
 
-pub fn get_game_state(net_info: &mut NetworkInfo) {
-    let mut counter = 0;
-    loop {
-        read_tcp_message(net_info);
-        counter += 1;
-        if counter == 10 {
-            send_chat_message(net_info, "Test Test message");
-            counter = 0;
+    match cipher.decrypt(&nonce, ciphertext) {
+        Ok(plaintext) => {
+            json_message = serde_json::from_slice(&plaintext)?;
+        }
+        Err(_) => {
+            println!("Decryption failed!");
+            return Err(Box::new(Error::new(ErrorKind::Other, "Decryption failed!")));
         }
     }
+
+    Ok(json_message)
 }
 
 pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<NetworkInfo, Error> {
@@ -115,6 +109,8 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
         let server_key: PublicKey = PublicKey::from(buffer);
         tcp_stream.write_all(public_key.as_bytes())?;
         tcp_stream.write_all(username.as_bytes())?;
+
+        let _ = tcp_stream.set_read_timeout(Some(Duration::from_millis(50)));
 
         let shared_secret = secret_key.diffie_hellman(&server_key);
         let key: chacha20poly1305::Key = *Key::from_slice(shared_secret.as_bytes());

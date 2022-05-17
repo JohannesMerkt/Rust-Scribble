@@ -5,7 +5,7 @@ use json::JsonValue;
 use rand::Rng;
 use rand_core::OsRng;
 use std::collections::VecDeque;
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Result, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -120,32 +120,30 @@ fn check_send_broadcast_messages(
         {
             let mut broadcast_queue = broadcast_queue.lock().unwrap();
             if broadcast_queue.len() > 0 {
-                println!("Broadcasting message");
                 broadcast_msg = Some(broadcast_queue.pop_front().unwrap());
             }
         }
 
         match broadcast_msg {
-            Some(msg) => {
-                println!("Sending broadcast message {:?}", msg);
-                match net_infos.try_lock() {
-                    Ok(mut net_infos) => {
-                        for net_info in net_infos.iter_mut() {
-                            match net_info.try_lock() {
-                                Ok(mut net_info) => {
+            Some(msg) => match net_infos.try_lock() {
+                Ok(mut net_infos) => {
+                    for net_info in net_infos.iter_mut() {
+                        match net_info.try_lock() {
+                            Ok(mut net_info) => {
+                                if !net_info.username.eq(&msg["user"].as_str().unwrap()) {
                                     let _ = send_message(&mut net_info, &msg);
                                 }
-                                Err(_) => {
-                                    println!("Could not lock net_info");
-                                }
+                            }
+                            Err(_) => {
+                                println!("Could not lock net_info");
                             }
                         }
                     }
-                    Err(_) => {
-                        readd_broadcast_message(msg, &broadcast_queue);
-                    }
                 }
-            }
+                Err(_) => {
+                    readd_broadcast_message(msg, &broadcast_queue);
+                }
+            },
             None => {}
         }
     }
@@ -155,7 +153,7 @@ fn read_tcp_message(net_info: &Arc<Mutex<NetworkInfo>>) -> Option<JsonValue> {
     let mut msg_buf: Vec<u8>;
     let msg_size: usize;
     let cipher;
-    let result: Result<(), io::Error>;
+    let result: Result<()>;
 
     {
         let mut net_info = net_info.lock().unwrap();
@@ -208,24 +206,19 @@ fn client_disconnected(net_info: &mut NetworkInfo, game_state: &Arc<Mutex<GameSt
     game_state.remove_player(net_info.username.to_string());
 }
 
-fn send_tcp_message(
-    tcp_stream: &mut TcpStream,
-    net_msg: (usize, Nonce, Vec<u8>),
-) -> io::Result<()> {
+fn send_tcp_message(tcp_stream: &mut TcpStream, net_msg: (usize, Nonce, Vec<u8>)) -> Result<()> {
     //TODO send 1 message not 3
-    let res = tcp_stream.write(&usize::to_le_bytes(net_msg.0));
-    let _ = tcp_stream.write(&net_msg.1);
-    let _ = tcp_stream.write(&net_msg.2);
-
-    match res {
-        Ok(_) => Ok(()),
-        Err(e) => Err(e),
-    }
+    tcp_stream.write(&usize::to_le_bytes(net_msg.0))?;
+    tcp_stream.write(&net_msg.1)?;
+    tcp_stream.write(&net_msg.2)?;
+    Ok(())
 }
 
 fn send_message(net_info: &mut NetworkInfo, msg: &JsonValue) -> io::Result<()> {
-    let net_msg = encrypt_json(msg.to_string().into_bytes(), net_info.key);
-    send_tcp_message(&mut net_info.tcp_stream, net_msg)
+    send_tcp_message(
+        &mut net_info.tcp_stream,
+        encrypt_json(msg.to_string().into_bytes(), net_info.key),
+    )
 }
 
 fn send_game_state(
@@ -291,6 +284,6 @@ fn handle_client(
             _ => {}
         }
 
-        sleep(Duration::from_millis(500));
+        sleep(Duration::from_millis(1000));
     }
 }

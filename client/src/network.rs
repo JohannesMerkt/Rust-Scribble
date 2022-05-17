@@ -91,10 +91,14 @@ fn read_tcp_message(net_info: &mut NetworkInfo) {
 }
 
 pub fn get_game_state(net_info: &mut NetworkInfo) {
+    let mut counter = 0;
     loop {
         read_tcp_message(net_info);
-        sleep(Duration::from_millis(1000));
-        send_chat_message(net_info, "Test Test message");
+        counter += 1;
+        if counter == 10 {
+            send_chat_message(net_info, "Test Test message");
+            counter = 0;
+        }
     }
 }
 
@@ -103,7 +107,6 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
 
     let ip_addr = ip_addr.parse::<std::net::Ipv4Addr>().unwrap();
     let socket = std::net::SocketAddrV4::new(ip_addr, port);
-
     if let Ok(mut tcp_stream) = TcpStream::connect(socket) {
         println!("Connected to the server!");
 

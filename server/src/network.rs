@@ -67,8 +67,10 @@ pub fn tcp_server(game_state: Mutex<GameState>) {
                 let thread_broadcast_queue = Arc::clone(&broadcast_queue);
                 let thread_net_infos = Arc::clone(&arc_net_infos);
 
-                let glb_cp_net_info = Arc::clone(&arc_net_info);
-                thread_net_infos.lock().unwrap().push(glb_cp_net_info);
+                {
+                    let glb_cp_net_info = Arc::clone(&arc_net_info);
+                    thread_net_infos.lock().unwrap().push(glb_cp_net_info);
+                }
 
                 thread::spawn(move || {
                     handle_client(thread_net_info, thread_broadcast_queue, thread_gs)
@@ -98,10 +100,15 @@ fn handle_message(
     }
 }
 
+fn readd_broadcast_message(
+    msg: json::JsonValue,
+    broadcast_queue: &Arc<Mutex<VecDeque<JsonValue>>>,
+) {
+    broadcast_queue.lock().unwrap().push_front(msg);
+}
+
 fn add_broadcast_message(msg: JsonValue, broadcast_queue: &Arc<Mutex<VecDeque<JsonValue>>>) {
-    let mut broadcast_queue = broadcast_queue.lock().unwrap();
-    println!("Adding to broadcast queue");
-    broadcast_queue.push_back(msg);
+    broadcast_queue.lock().unwrap().push_back(msg);
 }
 
 fn check_send_broadcast_messages(
@@ -111,9 +118,7 @@ fn check_send_broadcast_messages(
     loop {
         let mut broadcast_msg: Option<JsonValue> = None;
         {
-            println!("Getting Broadcast lock");
             let mut broadcast_queue = broadcast_queue.lock().unwrap();
-            println!("Got Broadcast lock");
             if broadcast_queue.len() > 0 {
                 println!("Broadcasting message");
                 broadcast_msg = Some(broadcast_queue.pop_front().unwrap());
@@ -126,8 +131,7 @@ fn check_send_broadcast_messages(
                 match net_infos.try_lock() {
                     Ok(mut net_infos) => {
                         for net_info in net_infos.iter_mut() {
-                            let net_info = net_info.try_lock();
-                            match net_info {
+                            match net_info.try_lock() {
                                 Ok(mut net_info) => {
                                     let _ = send_message(&mut net_info, &msg);
                                 }
@@ -137,8 +141,8 @@ fn check_send_broadcast_messages(
                             }
                         }
                     }
-                    Err(e) => {
-                        println!("Error getting net_infos lock: {}", e);
+                    Err(_) => {
+                        readd_broadcast_message(msg, &broadcast_queue);
                     }
                 }
             }
@@ -147,29 +151,41 @@ fn check_send_broadcast_messages(
     }
 }
 
-fn read_tcp_message(net_info: &mut NetworkInfo) -> Option<JsonValue> {
-    let mut size = [0; 8];
-    let _ = net_info.tcp_stream.read_exact(&mut size);
-    let msg_size: usize = usize::from_le_bytes(size);
+fn read_tcp_message(net_info: &Arc<Mutex<NetworkInfo>>) -> Option<JsonValue> {
+    let mut msg_buf: Vec<u8>;
+    let msg_size: usize;
+    let cipher;
+    let result: Result<(), io::Error>;
 
-    if msg_size == 0 {
-        return None;
+    {
+        let mut net_info = net_info.lock().unwrap();
+        let mut size = [0; 8];
+        let res_size = net_info.tcp_stream.read_exact(&mut size);
+        match res_size {
+            Ok(_) => {
+                msg_size = usize::from_le_bytes(size);
+            }
+            Err(_) => {
+                return None;
+            }
+        }
+
+        msg_buf = vec![0; msg_size];
+        result = net_info.tcp_stream.read_exact(&mut msg_buf);
+
+        cipher = ChaCha20Poly1305::new(&net_info.key);
     }
 
-    let mut msg_buf = vec![0; msg_size];
-    let read_size = net_info.tcp_stream.read_exact(&mut msg_buf);
-
-    let cipher = ChaCha20Poly1305::new(&net_info.key);
     let nonce: Nonce = GenericArray::clone_from_slice(&msg_buf[0..12]);
 
-    match read_size {
+    match result {
         Ok(_) => {
             let ciphertext = &msg_buf[12..msg_size];
             let recv_data: String = String::from_utf8(cipher.decrypt(&nonce, ciphertext).unwrap())
                 .expect("Invalid UTF-8 sequence");
             Some(json::parse(&recv_data).unwrap())
         }
-        Err(e) => None,
+        Err(_) => None,
     }
 }
 
@@ -208,9 +224,7 @@ fn send_tcp_message(
 }
 
 fn send_message(net_info: &mut NetworkInfo, msg: &JsonValue) -> io::Result<()> {
-    let json_message = msg.to_string();
-    let (msg_size, nonce, ciphertext) = encrypt_json(json_message.into_bytes(), net_info.key);
-    let mut net_msg = (msg_size, nonce, ciphertext);
+    let net_msg = encrypt_json(msg.to_string().into_bytes(), net_info.key);
     send_tcp_message(&mut net_info.tcp_stream, net_msg)
 }
 
@@ -232,6 +246,10 @@ fn handle_client(
 ) {
     {
         let mut net_info = net_info.lock().unwrap();
+
+        let _ = net_info
+            .tcp_stream
+            .set_read_timeout(Some(Duration::from_millis(50)));
 
         let mut buffer = [0; 32];
         let _ = net_info.tcp_stream.read(&mut buffer);
@@ -256,7 +274,6 @@ fn handle_client(
 
     loop {
         //TODO make async/await instead of polling
-        let rcv_msg: Option<JsonValue>;
 
         {
             let mut net_info = net_info.lock().unwrap();
@@ -267,12 +284,7 @@ fn handle_client(
             }
         }
 
-        {
-            let mut net_info = net_info.lock().unwrap();
-            rcv_msg = read_tcp_message(&mut net_info);
-        }
-
-        match rcv_msg {
+        match read_tcp_message(&net_info) {
             Some(msg) => {
                 handle_message(msg, &broadcast_queue, &game_state);
             }

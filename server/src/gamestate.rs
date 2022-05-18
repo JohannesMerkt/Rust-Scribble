@@ -20,6 +20,8 @@ struct Board {
 }
 #[derive(Serialize, Deserialize)]
 pub struct GameState {
+    msg_type: String,
+    user: String,
     //Username of the player and score
     users: Vec<(String, i32)>,
     //Whose turn is it?
@@ -31,6 +33,8 @@ pub struct GameState {
 impl GameState {
     pub fn new() -> GameState {
         GameState {
+            msg_type: "gamestate".to_string(),
+            user: "server".to_string(),
             users: vec![],
             turn: "".to_string(),
             board: Board { board: vec![] },
@@ -72,7 +76,7 @@ impl GameState {
     }
 
     pub fn change_player_turn(&mut self) {
-        let mut i = 0;
+        let i = 0;
         for (name, _) in self.users.iter() {
             if name == &self.turn {
                 if i == self.users.len() - 1 {

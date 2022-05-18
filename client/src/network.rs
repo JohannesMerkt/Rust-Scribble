@@ -26,7 +26,7 @@ fn generate_keypair() -> (PublicKey, EphemeralSecret) {
 // Take message and assemble a json object to send to the server.
 pub fn send_chat_message(net_info: &mut NetworkInfo, msg: &str) -> Result<(), Error> {
     let json_message = json!({
-        "type": "chat_message",
+        "msg_type": "chat_message",
             "user": net_info.username.clone(),
             "message": msg.to_string(),
     });

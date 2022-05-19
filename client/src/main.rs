@@ -1,6 +1,7 @@
 mod gamestate;
 mod network;
 
+use serde_json::json;
 use std::{io, thread, time::Duration};
 
 fn main() {
@@ -10,6 +11,12 @@ fn main() {
     io::stdin()
         .read_line(&mut user_input)
         .expect("error: unable to read user input");
+
+    let chat_message = json!({
+        "msg_type": "chat_message",
+            "user": user_input.trim(),
+            "message": "Hello World!".to_string(),
+    });
 
     //Create a new net_info object
     let res = network::connect_to_server("127.0.0.1", 3000, &user_input.trim());
@@ -28,7 +35,7 @@ fn main() {
                 }
 
                 //Can use snd_res to detect server disconnection
-                let snd_res = network::send_chat_message(&mut net_info, "Hello world!");
+                let snd_res = network::send_message(&mut net_info, chat_message.clone());
                 match snd_res {
                     Ok(_) => {}
                     Err(_) => {

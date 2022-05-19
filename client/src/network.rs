@@ -3,7 +3,7 @@ use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use generic_array::GenericArray;
 use rand::Rng;
 use rand_core::OsRng;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::error;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::net::TcpStream;
@@ -23,32 +23,12 @@ fn generate_keypair() -> (PublicKey, EphemeralSecret) {
     (public, secret)
 }
 
-// Take message and assemble a json object to send to the server.
-pub fn send_chat_message(net_info: &mut NetworkInfo, msg: &str) -> Result<(), Error> {
-    let json_message = json!({
-        "msg_type": "chat_message",
-            "user": net_info.username.clone(),
-            "message": msg.to_string(),
-    });
-
-    let net_msg = encrypt_json(json_message, net_info.key);
-    send_tcp_message(&mut net_info.tcp_stream, net_msg)
-}
-
-fn handle_message(msg: serde_json::Value) {
-    //TODO Detect message type and handle accordingly
-    println!("{:?}", msg);
-}
-
-fn encrypt_json(json_message: Value, shared_key: Key) -> (usize, Nonce, Vec<u8>) {
+fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8>) {
     let nonce = *Nonce::from_slice(rand::thread_rng().gen::<[u8; 12]>().as_slice());
     let cipher = ChaCha20Poly1305::new(&shared_key);
 
     let ciphertext = cipher
-        .encrypt(
-            &nonce,
-            serde_json::to_string(&json_message).unwrap().as_bytes(),
-        )
+        .encrypt(&nonce, &json_message[..])
         .expect("encryption failure!");
 
     let msg_size = ciphertext.len() + 12;
@@ -65,6 +45,14 @@ fn send_tcp_message(
     tcp_stream.write(&net_msg.1)?;
     tcp_stream.write(&net_msg.2)?;
     Ok(())
+}
+
+// Take message and assemble a json object to send to the server.
+pub fn send_message(net_info: &mut NetworkInfo, msg: Value) -> Result<(), Error> {
+    send_tcp_message(
+        &mut net_info.tcp_stream,
+        encrypt_json(msg.to_string().into_bytes(), net_info.key),
+    )
 }
 
 pub fn read_tcp_message(

@@ -23,7 +23,7 @@ fn generate_keypair() -> (PublicKey, EphemeralSecret) {
     (public, secret)
 }
 
-fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8>) {
+fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8>, u32) {
     let nonce = *Nonce::from_slice(rand::thread_rng().gen::<[u8; 12]>().as_slice());
     let cipher = ChaCha20Poly1305::new(&shared_key);
 
@@ -31,19 +31,28 @@ fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8
         .encrypt(&nonce, &json_message[..])
         .expect("encryption failure!");
 
-    let msg_size = ciphertext.len() + 12;
+    let checksum = crc32fast::hash(&ciphertext);
 
-    (msg_size, nonce, ciphertext)
+    //Add 12 bytes for the nonce and 4 bytes for the checksum
+    let msg_size = ciphertext.len() + 16;
+
+    (msg_size, nonce, ciphertext, checksum)
+}
+
+fn check_checksum(ciphertext: &[u8], checksum: u32) -> bool {
+    let checksum_calc = crc32fast::hash(&ciphertext);
+    checksum == checksum_calc
 }
 
 fn send_tcp_message(
     tcp_stream: &mut TcpStream,
-    net_msg: (usize, Nonce, Vec<u8>),
+    net_msg: (usize, Nonce, Vec<u8>, u32),
 ) -> Result<(), Error> {
     //TODO send 1 message not 3
     tcp_stream.write(&usize::to_le_bytes(net_msg.0))?;
     tcp_stream.write(&net_msg.1)?;
     tcp_stream.write(&net_msg.2)?;
+    tcp_stream.write(&u32::to_le_bytes(net_msg.3))?;
     Ok(())
 }
 
@@ -69,7 +78,16 @@ pub fn read_tcp_message(
     let cipher = ChaCha20Poly1305::new(&net_info.key);
     let nonce: Nonce = GenericArray::clone_from_slice(&msg_buf[0..12]);
 
-    let ciphertext = &msg_buf[12..msg_size];
+    let ciphertext = &msg_buf[12..msg_size - 4];
+    let checksum: u32 = u32::from_le_bytes(msg_buf[msg_size - 4..msg_size].try_into()?);
+
+    //if check_checksum of ciphertext returns false, throw error
+    if !check_checksum(&ciphertext, checksum) {
+        return Err(Box::new(Error::new(
+            ErrorKind::InvalidData,
+            "Checksum failed",
+        )));
+    }
 
     match cipher.decrypt(&nonce, ciphertext) {
         Ok(plaintext) => {

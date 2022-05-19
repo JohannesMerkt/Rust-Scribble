@@ -68,7 +68,7 @@ pub fn read_tcp_message(
     net_info: &mut NetworkInfo,
 ) -> Result<serde_json::Value, Box<dyn error::Error>> {
     let json_message;
-    let mut size = [0; 8];
+    let mut size = [0; (usize::BITS / 8) as usize];
     net_info.tcp_stream.read_exact(&mut size)?;
     let msg_size: usize = usize::from_le_bytes(size);
 

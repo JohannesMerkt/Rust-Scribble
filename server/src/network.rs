@@ -149,7 +149,8 @@ fn read_tcp_message(
     net_info: &Arc<Mutex<NetworkInfo>>,
 ) -> Result<serde_json::Value, Box<dyn error::Error>> {
     let json_message;
-    let mut size = [0; 8];
+
+    let mut size = [0; (usize::BITS / 8) as usize];
     let msg_size;
     let mut msg_buf;
     let cipher;

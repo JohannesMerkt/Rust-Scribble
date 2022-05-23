@@ -1,8 +1,5 @@
 use egui::*;
 
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(default))]
-
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct Painting {
     /// in 0-1 normalized coordinates

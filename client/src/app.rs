@@ -1,10 +1,7 @@
 use egui::{TextStyle, ScrollArea};
+use crate::network::*;
 
 use crate::Painting;
-
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(default)] // if we add new fields, give them default values when deserializing old state
 
 pub struct TemplateApp {
     // Example stuff:
@@ -12,8 +9,7 @@ pub struct TemplateApp {
     view: u8,
     message: String,
     painting: Painting,
-    // this how you opt-out of serialization of a member
-    #[serde(skip)]
+    net_info: Option<NetworkInfo>,
     value: f32,
 }
 
@@ -26,32 +22,23 @@ impl Default for TemplateApp {
             message: "".to_owned(),
             painting: Default::default(),
             value: 2.7,
+            net_info: None,
         }
     }
 }
 
 impl TemplateApp {
-    /// Called once before the first frame.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // This is also where you can customized the look at feel of egui using
-        // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-        // cc.egui_ctx.set_visuals = 
-        // Load previous app state (if any).
-        // Note that you must enable the `persistence` feature for this to work.
-        cc.storage.and_then(|storage| eframe::get_value(storage, eframe::APP_KEY)).unwrap_or_default()
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
 impl eframe::App for TemplateApp {
-    /// Called by the frame work to save state before shutdown.
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, eframe::APP_KEY, self);
-    }
 
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        let Self { name, view, message, painting, value } = self;
+        let Self { name, view, message, painting, value, net_info } = self;
 
         // Examples of how to create different panels and windows.
         // Pick whichever suits you.
@@ -94,8 +81,19 @@ impl eframe::App for TemplateApp {
                 ui.heading("Give yourself a Name:");
                 ui.text_edit_singleline(name);
 
+                //Get the name and connect to the server
+
                 if ui.button("Connect").clicked() {
-                    *view = 1;
+                     let res = connect_to_server("127.0.0.1", 3000, &name);
+                        match res {
+                            Ok(info) => {
+                                *net_info = Some(info);
+                                *view = 1;
+                            },
+                            Err(err) => {
+                                //TODO ! Display Error Message here when Client cannot connect
+                            }
+                        }
                 }
                 egui::warn_if_debug_build(ui);
             });

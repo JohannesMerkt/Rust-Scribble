@@ -40,7 +40,7 @@ fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8
 }
 
 fn check_checksum(ciphertext: &[u8], checksum: u32) -> bool {
-    let checksum_calc = crc32fast::hash(&ciphertext);
+    let checksum_calc = crc32fast::hash(ciphertext);
     checksum == checksum_calc
 }
 
@@ -49,10 +49,10 @@ fn send_tcp_message(
     net_msg: (usize, Nonce, Vec<u8>, u32),
 ) -> Result<(), Error> {
     //TODO send 1 message not 3
-    tcp_stream.write(&usize::to_le_bytes(net_msg.0))?;
-    tcp_stream.write(&net_msg.1)?;
-    tcp_stream.write(&net_msg.2)?;
-    tcp_stream.write(&u32::to_le_bytes(net_msg.3))?;
+    tcp_stream.write_all(&usize::to_le_bytes(net_msg.0))?;
+    tcp_stream.write_all(&net_msg.1)?;
+    tcp_stream.write_all(&net_msg.2)?;
+    tcp_stream.write_all(&u32::to_le_bytes(net_msg.3))?;
     Ok(())
 }
 
@@ -67,7 +67,6 @@ pub fn send_message(net_info: &mut NetworkInfo, msg: Value) -> Result<(), Error>
 pub fn read_tcp_message(
     net_info: &mut NetworkInfo,
 ) -> Result<serde_json::Value, Box<dyn error::Error>> {
-    let json_message;
     let mut size = [0; (usize::BITS / 8) as usize];
     net_info.tcp_stream.read_exact(&mut size)?;
     let msg_size: usize = usize::from_le_bytes(size);
@@ -82,22 +81,22 @@ pub fn read_tcp_message(
     let checksum: u32 = u32::from_le_bytes(msg_buf[msg_size - 4..msg_size].try_into()?);
 
     //if check_checksum of ciphertext returns false, throw error
-    if !check_checksum(&ciphertext, checksum) {
+    if !check_checksum(ciphertext, checksum) {
         return Err(Box::new(Error::new(
             ErrorKind::InvalidData,
             "Checksum failed",
         )));
     }
 
-    match cipher.decrypt(&nonce, ciphertext) {
+    let json_message = match cipher.decrypt(&nonce, ciphertext) {
         Ok(plaintext) => {
-            json_message = serde_json::from_slice(&plaintext)?;
+            serde_json::from_slice(&plaintext)?
         }
         Err(_) => {
             println!("Decryption failed!");
             return Err(Box::new(Error::new(ErrorKind::Other, "Decryption failed!")));
         }
-    }
+    };
 
     Ok(json_message)
 }

@@ -6,7 +6,7 @@ use rand_core::OsRng;
 use serde_json::json;
 use std::collections::VecDeque;
 use std::error;
-use std::io::{self, BufRead, BufReader, Error, ErrorKind, Read, Write};
+use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -123,32 +123,30 @@ fn check_send_broadcast_messages(
     broadcast_queue: &Arc<Mutex<VecDeque<serde_json::Value>>>,
 ) {
     loop {
-        match broadcast_queue.lock().unwrap().pop_front() {
-            Some(msg) => match net_infos.try_lock() {
+        if let Some(msg) = broadcast_queue.lock().unwrap().pop_front() {
+            match net_infos.try_lock() {
                 Ok(mut net_infos) => {
                     for net_info in net_infos.iter_mut() {
-                        let _ = send_message(&net_info, &msg);
+                        let _ = send_message(net_info, &msg);
                     }
                 }
                 Err(_) => {
                     // If we couldn't lock the net_infos, readd the message to the queue
-                    re_add_broadcast_message(msg, &broadcast_queue);
+                    re_add_broadcast_message(msg, broadcast_queue);
                 }
-            },
-            _ => {}
+            }
         }
     }
 }
 
 fn check_checksum(ciphertext: &[u8], checksum: u32) -> bool {
-    let checksum_calc = crc32fast::hash(&ciphertext);
+    let checksum_calc = crc32fast::hash(ciphertext);
     checksum == checksum_calc
 }
 
 fn read_tcp_message(
     net_info: &Arc<Mutex<NetworkInfo>>,
 ) -> Result<serde_json::Value, Box<dyn error::Error>> {
-    let json_message;
 
     let mut size = [0; (usize::BITS / 8) as usize];
     let msg_size;
@@ -171,24 +169,25 @@ fn read_tcp_message(
     let checksum: u32 = u32::from_le_bytes(msg_buf[msg_size - 4..msg_size].try_into()?);
 
     //if check_checksum of ciphertext returns false, throw error
-    if !check_checksum(&ciphertext, checksum) {
+    if !check_checksum(ciphertext, checksum) {
         return Err(Box::new(Error::new(
             ErrorKind::InvalidData,
             "Checksum failed",
         )));
     }
 
-    match cipher.decrypt(&nonce, ciphertext) {
+    let json_message = match cipher.decrypt(&nonce, ciphertext) {
         Ok(plaintext) => {
-            json_message = serde_json::from_slice(&plaintext)?;
+            serde_json::from_slice(&plaintext)?
         }
         Err(_) => {
             println!("Decryption failed!");
             return Err(Box::new(Error::new(ErrorKind::Other, "Decryption failed!")));
         }
-    }
+    };
 
     Ok(json_message)
+
 }
 
 fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8>, u32) {
@@ -219,10 +218,10 @@ fn send_tcp_message(
     net_msg: (usize, Nonce, Vec<u8>, u32),
 ) -> Result<(), Error> {
     //TODO send 1 message not 3
-    tcp_stream.write(&usize::to_le_bytes(net_msg.0))?;
-    tcp_stream.write(&net_msg.1)?;
-    tcp_stream.write(&net_msg.2)?;
-    tcp_stream.write(&u32::to_le_bytes(net_msg.3))?;
+    tcp_stream.write_all(&usize::to_le_bytes(net_msg.0))?;
+    tcp_stream.write_all(&net_msg.1)?;
+    tcp_stream.write_all(&net_msg.2)?;
+    tcp_stream.write_all(&u32::to_le_bytes(net_msg.3))?;
     Ok(())
 }
 
@@ -232,7 +231,7 @@ fn send_message(net_info: &Arc<Mutex<NetworkInfo>>, msg: &serde_json::Value) -> 
         Ok(mut net_info) => {
             if !net_info.username.eq(&msg["user"]) {
                 println!("SND {} to {}", &msg, net_info.username);
-                let key = net_info.key.clone();
+                let key = net_info.key;
                 send_tcp_message(
                     &mut net_info.tcp_stream,
                     encrypt_json(msg.to_string().into_bytes(), key),
@@ -281,11 +280,8 @@ fn handle_client(
     let mut counter = 30;
 
     loop {
-        match read_tcp_message(&net_info) {
-            Ok(msg) => {
-                handle_message(msg, &broadcast_queue, &game_state);
-            }
-            Err(_) => {}
+        if let Ok(msg) = read_tcp_message(&net_info) {
+            handle_message(msg, &broadcast_queue, &game_state);
         }
 
         sleep(Duration::from_millis(1000));

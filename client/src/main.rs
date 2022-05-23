@@ -19,20 +19,17 @@ fn main() {
     });
 
     //Create a new net_info object
-    let res = network::connect_to_server("127.0.0.1", 3000, &user_input.trim());
+    let res = network::connect_to_server("127.0.0.1", 3000, user_input.trim());
 
     match res {
         Ok(mut net_info) => {
             loop {
                 let rcv_msg = network::read_tcp_message(&mut net_info);
-                match rcv_msg {
-                    Ok(msg) => {
-                        //Handle Messages here
-                        //For Example, update gamestate, update chat, etc.
-                        println!("{:?}", msg);
-                    }
-                    Err(_) => { /*Read Errors could be handled here*/ }
-                }
+                 if let Ok(msg) = rcv_msg {
+                     //Handle Messages here
+                     //For Example, update gamestate, update chat, etc.
+                     println!("{:?}", msg);
+                 }
 
                 //Can use snd_res to detect server disconnection
                 let snd_res = network::send_message(&mut net_info, chat_message.clone());

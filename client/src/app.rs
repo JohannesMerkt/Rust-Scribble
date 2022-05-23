@@ -1,4 +1,6 @@
-use egui::{Stroke, Color32, Pos2, TextStyle, ScrollArea};
+use egui::{TextStyle, ScrollArea};
+
+use crate::Painting;
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -9,8 +11,7 @@ pub struct TemplateApp {
     name: String,
     view: u8,
     message: String,
-    stroke: Stroke,
-    lines: Vec<Vec<Pos2>>,
+    painting: Painting,
     // this how you opt-out of serialization of a member
     #[serde(skip)]
     value: f32,
@@ -23,8 +24,7 @@ impl Default for TemplateApp {
             name: "Player".to_owned(),
             view: 0,
             message: "".to_owned(),
-            stroke: Stroke::new(1.0, Color32::from_rgb(25, 200, 100)),
-            lines: Default::default(),
+            painting: Default::default(),
             value: 2.7,
         }
     }
@@ -35,14 +35,10 @@ impl TemplateApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customized the look at feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-
+        // cc.egui_ctx.set_visuals = 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
-        if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-        }
-
-        Default::default()
+        cc.storage.and_then(|storage| eframe::get_value(storage, eframe::APP_KEY)).unwrap_or_default()
     }
 }
 
@@ -55,7 +51,7 @@ impl eframe::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        let Self { name, view, message, stroke, lines, value } = self;
+        let Self { name, view, message, painting, value } = self;
 
         // Examples of how to create different panels and windows.
         // Pick whichever suits you.
@@ -89,14 +85,7 @@ impl eframe::App for TemplateApp {
             });
             egui::CentralPanel::default().show(ctx, |ui| {
                 // The central panel the region left after adding TopPanel's and SidePanel's
-                ui.horizontal(|ui| {
-                    egui::stroke_ui(ui, stroke, "Stroke");
-                    ui.separator();
-                    if ui.button("Clear Painting").clicked() {
-                        lines.clear();
-                    }
-                });
-                egui::warn_if_debug_build(ui);
+                painting.ui(ui);
             });
         } else {
             egui::CentralPanel::default().show(ctx, |ui| {
@@ -122,3 +111,4 @@ impl eframe::App for TemplateApp {
         }
     }
 }
+

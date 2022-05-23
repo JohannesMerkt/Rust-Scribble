@@ -7,6 +7,6 @@ fn main() {
     eframe::run_native(
         "Scribble",
         native_options,
-        Box::new(|cc| Box::new(rust_scribble::TemplateApp::new())),
+        Box::new(|_| Box::new(rust_scribble::TemplateApp::new())),
     );
 }

@@ -74,11 +74,25 @@ impl eframe::App for TemplateApp {
                 ui.horizontal(|ui| {
                     ui.label("Guess: ");
                     ui.text_edit_singleline(message);
+                    if ui.button("Send").clicked() {
+                        let msg = json!({
+                            "kind": "chat_message",
+                            "username": name.to_string(),
+                            "message": message.to_string(),
+                        });
+                        
+                        if let Some(mut network_info) = net_info.as_mut() {
+                            let _ = send_message(&mut network_info, msg);
+                        }
+                        *message = "".to_string();
+                    }
+
                 });
 
                 if ui.button("Disconnect").clicked() {
                     *view = 0;
                 }
+
 
                 //A button that will send a ready message to the server
                 if ui.button("Ready").clicked() {
@@ -105,7 +119,6 @@ impl eframe::App for TemplateApp {
                 ui.text_edit_singleline(name);
 
                 //Get the name and connect to the server
-
                 if ui.button("Connect").clicked() {
                      let res = connect_to_server("127.0.0.1", 3000, name);
                         match res {
@@ -134,6 +147,12 @@ impl eframe::App for TemplateApp {
         fn handle_message(msg: serde_json::Value) {
             //TODO handle messages 
             println!("{}", msg.to_string());
+
+            //Display message in the chat window
+            if msg["kind"].eq("chat_message") {
+                let message = msg["message"].as_str().unwrap();
+                println!("{}", message);
+            }
         }
     }
 }

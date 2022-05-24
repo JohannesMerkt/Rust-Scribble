@@ -20,6 +20,7 @@ impl LobbyState {
     }
 
     pub fn remove_player(&mut self, username: String) {
+        let username = username[1..username.len()-1].to_string();
         self.users.retain(|(u, _)| u != &username);
     }
 

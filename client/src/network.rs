@@ -116,7 +116,7 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
         tcp_stream.write_all(public_key.as_bytes())?;
         tcp_stream.write_all(username.as_bytes())?;
 
-        let _ = tcp_stream.set_read_timeout(Some(Duration::from_millis(50)));
+        let _ = tcp_stream.set_read_timeout(Some(Duration::from_millis(30)));
 
         let shared_secret = secret_key.diffie_hellman(&server_key);
         let key: chacha20poly1305::Key = *Key::from_slice(shared_secret.as_bytes());

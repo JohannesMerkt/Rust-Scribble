@@ -9,6 +9,7 @@ pub struct TemplateApp {
     name: String,
     view: u8,
     message: String,
+    chat_messages: Vec<String>,
     painting: Painting,
     net_info: Option<NetworkInfo>,
     value: f32,
@@ -21,6 +22,7 @@ impl Default for TemplateApp {
             name: "Player".to_owned(),
             view: 0,
             message: "".to_owned(),
+            chat_messages: vec![],
             painting: Default::default(),
             value: 2.7,
             net_info: None,
@@ -39,13 +41,13 @@ impl eframe::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        let Self { name, view, message, painting, value, net_info } = self;
+        let Self { name, view, message, painting, value, net_info, chat_messages } = self;
 
         {
             //Read a message from the network
             if let Some(network_info) = net_info.as_mut() {
                 if let Ok(msg)= read_tcp_message(network_info) {
-                    handle_message(msg);
+                    handle_message(msg, chat_messages);
                 }
             }
         }
@@ -63,16 +65,16 @@ impl eframe::App for TemplateApp {
                     ui,
                     row_height,
                     100,
-                    |ui, row_range| {
-                        for row in row_range {
-                            let text = format!("This is message {}", row + 1);
+                    |ui, _| {
+                        for row in chat_messages.iter() {
+                            let text = format!("{}", row);
                             ui.label(text);
                         }
                     },
                 );
 
                 ui.horizontal(|ui| {
-                    ui.label("Guess: ");
+                    ui.label("Chat: ");
                     ui.text_edit_singleline(message);
                     if ui.button("Send").clicked() {
                         let msg = json!({
@@ -144,14 +146,16 @@ impl eframe::App for TemplateApp {
             });
         }
 
-        fn handle_message(msg: serde_json::Value) {
+        fn handle_message(msg: serde_json::Value, chat_messages: &mut Vec<String>) {
             //TODO handle messages 
             println!("{}", msg.to_string());
 
             //Display message in the chat window
             if msg["kind"].eq("chat_message") {
                 let message = msg["message"].as_str().unwrap();
-                println!("{}", message);
+                let username = msg["username"].as_str().unwrap();
+                chat_messages.push(format!("{}: {}", username, message));
+                println!("{} says: {}", username, message);
             }
         }
     }

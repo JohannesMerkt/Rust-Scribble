@@ -295,14 +295,14 @@ fn handle_client(
         }
     }
 
-    let mut counter = 30;
+    let mut counter = 500;
 
     loop {
         if let Ok(msg) = read_tcp_message(&net_info) {
             handle_message(msg, &broadcast_queue, &game_state, &lobby_state);
         }
 
-        sleep(Duration::from_millis(1000));
+        sleep(Duration::from_millis(100));
 
         //TODO: Move to a function
         counter -= 1;
@@ -311,7 +311,7 @@ fn handle_client(
             let alive = send_message(&net_info, &ping_msg);
             match alive {
                 Ok(_) => {
-                    counter = 30;
+                    counter = 500;
                 }
                 Err(_) => {
                     client_disconnected(&net_info, &game_state, &lobby_state);

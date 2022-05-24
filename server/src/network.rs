@@ -15,6 +15,7 @@ use std::time::Duration;
 use x25519_dalek::{PublicKey, ReusableSecret};
 
 use crate::gamestate::GameState;
+use crate::lobby::{LobbyState, self};
 
 pub struct NetworkInfo {
     username: String,
@@ -33,7 +34,10 @@ pub fn tcp_server(game_state: Mutex<GameState>) {
     let loopback = Ipv4Addr::new(127, 0, 0, 1);
     let socket = SocketAddrV4::new(loopback, 3000);
     let listener = TcpListener::bind(socket).unwrap();
+
+
     let global_gs = Arc::new(game_state);
+    let global_lobby = Arc::new(Mutex::new(LobbyState::new()));
 
     println!("Listening on {}", socket);
 
@@ -63,6 +67,7 @@ pub fn tcp_server(game_state: Mutex<GameState>) {
                 });
 
                 let thread_gs = Arc::clone(&global_gs);
+                let thread_lobby = Arc::clone(&global_lobby);
                 let arc_net_info = Arc::new(net_info);
                 let thread_net_info = Arc::clone(&arc_net_info);
 
@@ -75,7 +80,7 @@ pub fn tcp_server(game_state: Mutex<GameState>) {
                 }
 
                 thread::spawn(move || {
-                    handle_client(thread_net_info, thread_broadcast_queue, thread_gs)
+                    handle_client(thread_net_info, thread_broadcast_queue, thread_gs, thread_lobby);
                 });
             }
             Err(e) => println!("Error sending public key to {}: {}", addr, e),
@@ -87,13 +92,16 @@ fn handle_message(
     msg: serde_json::Value,
     broadcast_queue: &Arc<Mutex<VecDeque<serde_json::Value>>>,
     game_state: &Arc<Mutex<GameState>>,
+    lobby: &Arc<Mutex<LobbyState>>,
 ) {
     println!("RCV: {:?}", msg);
 
-    if msg["msg_type"].eq("chat_message") {
+    if msg["kind"].eq("chat_message") {
         add_broadcast_message(msg, broadcast_queue);
-    } else if msg["msg_type"].eq("guess") {
-        println!("Guess: {}", msg["guess"].as_str().unwrap());
+    } else if msg["kind"].eq("ready") {
+        let mut lobby = lobby.lock().unwrap();
+        lobby.set_ready(msg["username"].to_string(), msg["ready"].as_bool().unwrap());
+        add_lobby_broadcast(&lobby, broadcast_queue);
     }
 }
 
@@ -116,6 +124,13 @@ fn add_game_state_broadcast(
     broadcast_queue: &Arc<Mutex<VecDeque<serde_json::Value>>>,
 ) {
     add_broadcast_message(json!(&game_state), broadcast_queue);
+}
+
+fn add_lobby_broadcast(
+    lobby_state: &LobbyState,
+    broadcast_queue: &Arc<Mutex<VecDeque<serde_json::Value>>>,
+) {
+    add_broadcast_message(json!(&lobby_state), broadcast_queue);
 }
 
 fn check_send_broadcast_messages(
@@ -206,11 +221,13 @@ fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8
     (msg_size, nonce, ciphertext, checksum)
 }
 
-fn client_disconnected(net_info: &Arc<Mutex<NetworkInfo>>, game_state: &Arc<Mutex<GameState>>) {
+fn client_disconnected(net_info: &Arc<Mutex<NetworkInfo>>, game_state: &Arc<Mutex<GameState>>, lobby: &Arc<Mutex<LobbyState>>) {
     let net_info = net_info.lock().unwrap();
     println!("Client {:?} disconnected", net_info.username);
     let mut game_state = game_state.lock().unwrap();
     game_state.remove_player(net_info.username.to_string());
+    let mut lobby = lobby.lock().unwrap();
+    lobby.remove_player(net_info.username.to_string());
 }
 
 fn send_tcp_message(
@@ -247,6 +264,7 @@ fn handle_client(
     net_info: Arc<Mutex<NetworkInfo>>,
     broadcast_queue: Arc<Mutex<VecDeque<serde_json::Value>>>,
     game_state: Arc<Mutex<GameState>>,
+    lobby_state: Arc<Mutex<LobbyState>>,
 ) {
     {
         let mut net_info = net_info.lock().unwrap();
@@ -271,9 +289,9 @@ fn handle_client(
 
         {
             let username = net_info.username.clone();
-            let mut game_state = game_state.lock().unwrap();
-            game_state.add_player(username);
-            add_game_state_broadcast(&game_state, &broadcast_queue);
+            let mut lobby_state = lobby_state.lock().unwrap();
+            lobby_state.add_player(username);
+            add_lobby_broadcast(&lobby_state, &broadcast_queue);
         }
     }
 
@@ -281,7 +299,7 @@ fn handle_client(
 
     loop {
         if let Ok(msg) = read_tcp_message(&net_info) {
-            handle_message(msg, &broadcast_queue, &game_state);
+            handle_message(msg, &broadcast_queue, &game_state, &lobby_state);
         }
 
         sleep(Duration::from_millis(1000));
@@ -296,7 +314,7 @@ fn handle_client(
                     counter = 30;
                 }
                 Err(_) => {
-                    client_disconnected(&net_info, &game_state);
+                    client_disconnected(&net_info, &game_state, &lobby_state);
                     break;
                 }
             }

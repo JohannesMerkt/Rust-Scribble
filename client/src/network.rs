@@ -11,6 +11,7 @@ use std::str;
 use std::time::Duration;
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
+
 pub struct NetworkInfo {
     username: String,
     tcp_stream: TcpStream,

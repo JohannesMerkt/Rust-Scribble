@@ -1,5 +1,6 @@
 mod gamestate;
 mod network;
+mod lobby;
 
 use std::sync::Mutex;
 fn main() {

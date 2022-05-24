@@ -1,4 +1,5 @@
 use egui::{TextStyle, ScrollArea};
+use serde_json::json;
 use crate::network::*;
 
 use crate::Painting;
@@ -40,6 +41,15 @@ impl eframe::App for TemplateApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let Self { name, view, message, painting, value, net_info } = self;
 
+        {
+            //Read a message from the network
+            if let Some(network_info) = net_info.as_mut() {
+                if let Ok(msg)= read_tcp_message(network_info) {
+                    handle_message(msg);
+                }
+            }
+        }
+
         // Examples of how to create different panels and windows.
         // Pick whichever suits you.
         // Tip: a good default choice is to just keep the `CentralPanel`.
@@ -69,6 +79,19 @@ impl eframe::App for TemplateApp {
                 if ui.button("Disconnect").clicked() {
                     *view = 0;
                 }
+
+                //A button that will send a ready message to the server
+                if ui.button("Ready").clicked() {
+                    let msg = json!({
+                        "kind": "ready",
+                        "username": name.to_string(),
+                        "ready": true,
+                    });
+                    
+                    if let Some(mut network_info) = net_info.as_mut() {
+                        let _ = send_message(&mut network_info, msg);
+                    }
+                }
             });
             egui::CentralPanel::default().show(ctx, |ui| {
                 // The central panel the region left after adding TopPanel's and SidePanel's
@@ -90,7 +113,7 @@ impl eframe::App for TemplateApp {
                                 *net_info = Some(info);
                                 *view = 1;
                             },
-                            Err(err) => {
+                            Err(_) => {
                                 //TODO ! Display Error Message here when Client cannot connect
                             }
                         }
@@ -106,6 +129,11 @@ impl eframe::App for TemplateApp {
                 ui.label("You can turn on resizing and scrolling if you like.");
                 ui.label("You would normally chose either panels OR windows.");
             });
+        }
+
+        fn handle_message(msg: serde_json::Value) {
+            //TODO handle messages 
+            println!("{}", msg.to_string());
         }
     }
 }

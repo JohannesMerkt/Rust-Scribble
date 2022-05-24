@@ -84,7 +84,7 @@ impl eframe::App for TemplateApp {
                 //Get the name and connect to the server
 
                 if ui.button("Connect").clicked() {
-                     let res = connect_to_server("127.0.0.1", 3000, &name);
+                     let res = connect_to_server("127.0.0.1", 3000, name);
                         match res {
                             Ok(info) => {
                                 *net_info = Some(info);

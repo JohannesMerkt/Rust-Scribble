@@ -4,19 +4,19 @@ use generic_array::GenericArray;
 use rand::Rng;
 use rand_core::OsRng;
 use serde_json::json;
-use std::collections::VecDeque;
 use std::error;
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
 use x25519_dalek::{PublicKey, ReusableSecret};
 use rayon::prelude::*;
+use std::sync::mpsc::channel;
 
 use crate::gamestate::GameState;
-use crate::lobby::{LobbyState, self};
+use crate::lobby::LobbyState;
 
 pub struct NetworkInfo {
     username: String,
@@ -36,22 +36,19 @@ pub fn tcp_server(game_state: Mutex<GameState>) {
     let socket = SocketAddrV4::new(loopback, 3000);
     let listener = TcpListener::bind(socket).unwrap();
 
-
     let global_gs = Arc::new(game_state);
     let global_lobby = Arc::new(Mutex::new(LobbyState::new()));
 
     println!("Listening on {}", socket);
 
     let global_net_infos: Vec<Arc<Mutex<NetworkInfo>>> = Vec::new();
-    let broadcast_queue: Arc<Mutex<VecDeque<serde_json::Value>>> =
-        Arc::new(Mutex::new(VecDeque::new()));
+    let (tx, rx) = channel();
 
     //Spin off a thread to wait for broadcast messages and send them to all clients
-    let arc_queue = Arc::clone(&broadcast_queue);
     let arc_net_infos = Arc::new(Mutex::new(global_net_infos));
     let net_infos = Arc::clone(&arc_net_infos);
 
-    thread::spawn(move || check_send_broadcast_messages(&net_infos, &arc_queue));
+    thread::spawn(move || check_send_broadcast_messages(&net_infos, rx));
 
     loop {
         let (public_key, secret_key) = generate_keypair();
@@ -71,17 +68,16 @@ pub fn tcp_server(game_state: Mutex<GameState>) {
                 let thread_lobby = Arc::clone(&global_lobby);
                 let arc_net_info = Arc::new(net_info);
                 let thread_net_info = Arc::clone(&arc_net_info);
-
-                let thread_broadcast_queue = Arc::clone(&broadcast_queue);
-                let thread_net_infos = Arc::clone(&arc_net_infos);
+                let thread_tx = tx.clone();
 
                 {
+                    let thread_net_infos = Arc::clone(&arc_net_infos);
                     let glb_cp_net_info = Arc::clone(&arc_net_info);
                     thread_net_infos.lock().unwrap().push(glb_cp_net_info);
                 }
 
                 thread::spawn(move || {
-                    handle_client(thread_net_info, thread_broadcast_queue, thread_gs, thread_lobby);
+                    handle_client(thread_net_info, thread_gs, thread_lobby, thread_tx);
                 });
             }
             Err(e) => println!("Error sending public key to {}: {}", addr, e),
@@ -91,65 +87,31 @@ pub fn tcp_server(game_state: Mutex<GameState>) {
 
 fn handle_message(
     msg: serde_json::Value,
-    broadcast_queue: &Arc<Mutex<VecDeque<serde_json::Value>>>,
     game_state: &Arc<Mutex<GameState>>,
     lobby: &Arc<Mutex<LobbyState>>,
+    tx: &mpsc::Sender<serde_json::Value>,
 ) {
     println!("RCV: {:?}", msg);
 
     if msg["kind"].eq("chat_message") {
-        add_broadcast_message(msg, broadcast_queue);
+        let  _ = tx.send(msg);
     } else if msg["kind"].eq("ready") {
         let mut lobby = lobby.lock().unwrap();
         lobby.set_ready(msg["username"].to_string(), msg["ready"].as_bool().unwrap());
-        add_lobby_broadcast(&lobby, broadcast_queue);
+        let _ = tx.send(json!(&*lobby));
     }
-}
-
-fn re_add_broadcast_message(
-    msg: serde_json::Value,
-    broadcast_queue: &Arc<Mutex<VecDeque<serde_json::Value>>>,
-) {
-    broadcast_queue.lock().unwrap().push_front(msg);
-}
-
-fn add_broadcast_message(
-    msg: serde_json::Value,
-    broadcast_queue: &Arc<Mutex<VecDeque<serde_json::Value>>>,
-) {
-    broadcast_queue.lock().unwrap().push_back(msg);
-}
-
-fn add_game_state_broadcast(
-    game_state: &GameState,
-    broadcast_queue: &Arc<Mutex<VecDeque<serde_json::Value>>>,
-) {
-    add_broadcast_message(json!(&game_state), broadcast_queue);
-}
-
-fn add_lobby_broadcast(
-    lobby_state: &LobbyState,
-    broadcast_queue: &Arc<Mutex<VecDeque<serde_json::Value>>>,
-) {
-    add_broadcast_message(json!(&lobby_state), broadcast_queue);
 }
 
 fn check_send_broadcast_messages(
     net_infos: &Arc<Mutex<Vec<Arc<Mutex<NetworkInfo>>>>>,
-    broadcast_queue: &Arc<Mutex<VecDeque<serde_json::Value>>>,
+    rx: mpsc::Receiver<serde_json::Value>,
 ) {
+
     loop {
-        if let Some(msg) = broadcast_queue.lock().unwrap().pop_front() {
-            match net_infos.try_lock() {
-                Ok(mut netinfos) => {
-                    let ls = &mut *netinfos;
-                    ls.par_iter_mut().for_each(|net_info| {let _ = send_message(net_info, &msg);}) 
-                }
-                Err(_) => {
-                    // If we couldn't lock the net_infos, readd the message to the queue
-                    re_add_broadcast_message(msg, broadcast_queue);
-                }
-            }
+        if let Ok(msg) = rx.recv() {
+            net_infos.lock().unwrap().par_iter_mut().for_each(|net_info| {
+                let _ = send_message(net_info, &msg);
+            });
         }
     }
 }
@@ -262,9 +224,9 @@ fn send_message(net_info: &Arc<Mutex<NetworkInfo>>, msg: &serde_json::Value) -> 
 
 fn handle_client(
     net_info: Arc<Mutex<NetworkInfo>>,
-    broadcast_queue: Arc<Mutex<VecDeque<serde_json::Value>>>,
     game_state: Arc<Mutex<GameState>>,
     lobby_state: Arc<Mutex<LobbyState>>,
+    tx: mpsc::Sender<serde_json::Value>,
 ) {
     {
         let mut net_info = net_info.lock().unwrap();
@@ -291,7 +253,7 @@ fn handle_client(
             let username = net_info.username.clone();
             let mut lobby_state = lobby_state.lock().unwrap();
             lobby_state.add_player(username);
-            add_lobby_broadcast(&lobby_state, &broadcast_queue);
+            let _ = tx.send(json!(&*lobby_state));
         }
     }
 
@@ -299,7 +261,7 @@ fn handle_client(
 
     loop {
         if let Ok(msg) = read_tcp_message(&net_info) {
-            handle_message(msg, &broadcast_queue, &game_state, &lobby_state);
+            handle_message(msg, &game_state, &lobby_state, &tx);
         }
 
         sleep(Duration::from_millis(100));

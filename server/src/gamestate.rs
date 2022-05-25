@@ -7,14 +7,14 @@ struct Point {
 }
 
 #[derive(Serialize, Deserialize)]
-struct Color {
+pub struct Color {
     r: u8,
     g: u8,
     b: u8,
 }
 
 #[derive(Serialize, Deserialize)]
-struct Board {
+pub struct Board {
     //A vector of pixels/color that represent what has been drawn on the board.
     board: Vec<(Point, Color)>,
 }
@@ -55,14 +55,6 @@ impl GameState {
                 *score += points;
             }
         }
-    }
-
-    pub fn to_string(&self) -> String {
-        let mut string = "".to_string();
-        for (name, score) in &self.users {
-            string += &format!("{}: {}\n", name, score);
-        }
-        string
     }
 
     fn reset_player_scores(&mut self) {

@@ -69,8 +69,7 @@ impl eframe::App for TemplateApp {
                     100,
                     |ui, _| {
                         for row in chat_messages.iter() {
-                            let text = format!("{}", row);
-                            ui.label(text);
+                            ui.label(row.to_string());
                             ui.set_min_width(100.0);
                         }
                     },
@@ -86,8 +85,8 @@ impl eframe::App for TemplateApp {
                             "message": message.to_string(),
                         });
                         
-                        if let Some(mut network_info) = net_info.as_mut() {
-                            let _ = send_message(&mut network_info, msg);
+                        if let Some(network_info) = net_info.as_mut() {
+                            let _ = send_message(network_info, msg);
                         }
                         *message = "".to_string();
                     }
@@ -107,8 +106,8 @@ impl eframe::App for TemplateApp {
                         "ready": true,
                     });
                     
-                    if let Some(mut network_info) = net_info.as_mut() {
-                        let _ = send_message(&mut network_info, msg);
+                    if let Some(network_info) = net_info.as_mut() {
+                        let _ = send_message(network_info, msg);
                     }
                 }
             });
@@ -132,7 +131,7 @@ impl eframe::App for TemplateApp {
                                 *view = 1;
                             },
                             Err(_) => {
-                                //TODO ! Display Error Message here when Client cannot connect
+                                println!("Could not connect to server");
                             }
                         }
                 }
@@ -151,7 +150,7 @@ impl eframe::App for TemplateApp {
 
         fn handle_message(msg: serde_json::Value, chat_messages: &mut Vec<String>) {
             //TODO handle messages 
-            println!("{}", msg.to_string());
+            println!("{}", msg);
 
             //Display message in the chat window
             if msg["kind"].eq("chat_message") {

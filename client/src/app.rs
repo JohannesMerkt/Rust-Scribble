@@ -22,7 +22,7 @@ impl Default for TemplateApp {
             name: "Player".to_owned(),
             view: 0,
             message: "".to_owned(),
-            chat_messages: vec![],
+            chat_messages: vec!["Welcome to the Rust-EGUI Chat!".to_owned()],
             painting: Default::default(),
             value: 2.7,
             net_info: None,
@@ -61,6 +61,8 @@ impl eframe::App for TemplateApp {
                 ui.heading("Chat");
                 let text_style = TextStyle::Body;
                 let row_height = ui.text_style_height(&text_style);
+                //set min_width
+
                 ScrollArea::vertical().stick_to_bottom().max_height(200.0).show_rows(
                     ui,
                     row_height,
@@ -69,6 +71,7 @@ impl eframe::App for TemplateApp {
                         for row in chat_messages.iter() {
                             let text = format!("{}", row);
                             ui.label(text);
+                            ui.set_min_width(100.0);
                         }
                     },
                 );

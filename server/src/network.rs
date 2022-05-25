@@ -13,6 +13,7 @@ use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
 use x25519_dalek::{PublicKey, ReusableSecret};
+use rayon::prelude::*;
 
 use crate::gamestate::GameState;
 use crate::lobby::{LobbyState, self};
@@ -140,10 +141,9 @@ fn check_send_broadcast_messages(
     loop {
         if let Some(msg) = broadcast_queue.lock().unwrap().pop_front() {
             match net_infos.try_lock() {
-                Ok(mut net_infos) => {
-                    for net_info in net_infos.iter_mut() {
-                        let _ = send_message(net_info, &msg);
-                    }
+                Ok(mut netinfos) => {
+                    let ls = &mut *netinfos;
+                    ls.par_iter_mut().for_each(|net_info| {let _ = send_message(net_info, &msg);}) 
                 }
                 Err(_) => {
                     // If we couldn't lock the net_infos, readd the message to the queue

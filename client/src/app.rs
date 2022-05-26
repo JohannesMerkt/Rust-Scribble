@@ -39,7 +39,6 @@ impl TemplateApp {
 impl eframe::App for TemplateApp {
 
     /// Called each time the UI needs repainting, which may be many times per second.
-    /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let Self { name, view, message, painting, value, net_info, chat_messages } = self;
 
@@ -52,10 +51,6 @@ impl eframe::App for TemplateApp {
             }
         }
 
-        // Examples of how to create different panels and windows.
-        // Pick whichever suits you.
-        // Tip: a good default choice is to just keep the `CentralPanel`.
-        // For inspiration and more examples, go to https://emilk.github.io/egui
         if *view == 1 {
             egui::SidePanel::right("side_panel").show(ctx, |ui| {
                 ui.heading("Chat");

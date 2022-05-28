@@ -32,7 +32,7 @@ fn generate_keypair() -> (PublicKey, ReusableSecret) {
 }
 
 pub fn tcp_server(game_state: Mutex<GameState>) {
-    let loopback = Ipv4Addr::new(127, 0, 0, 1);
+    let loopback = Ipv4Addr::new(0, 0, 0, 0);
     let socket = SocketAddrV4::new(loopback, 3000);
     let listener = TcpListener::bind(socket).unwrap();
 

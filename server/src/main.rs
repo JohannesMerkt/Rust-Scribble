@@ -3,9 +3,19 @@ mod network;
 mod lobby;
 
 use std::sync::Mutex;
-fn main() {
-    //TODO need to add a broadcast vector to hold broadcast messages from all threads
-    let game_state = Mutex::new(gamestate::GameState::new());
+use clap::Parser;
 
-    network::tcp_server(game_state);
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    #[clap(short, long, default_value_t = 3000)]
+    port: u16,
+}
+
+
+fn main() {
+    let game_state = Mutex::new(gamestate::GameState::new());
+    let args = Args::parse();
+
+    network::tcp_server(game_state, args.port);
 }

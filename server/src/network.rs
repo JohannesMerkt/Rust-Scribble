@@ -31,9 +31,9 @@ fn generate_keypair() -> (PublicKey, ReusableSecret) {
     (public, secret)
 }
 
-pub fn tcp_server(game_state: Mutex<GameState>) {
+pub fn tcp_server(game_state: Mutex<GameState>, port: u16) {
     let loopback = Ipv4Addr::new(0, 0, 0, 0);
-    let socket = SocketAddrV4::new(loopback, 3000);
+    let socket = SocketAddrV4::new(loopback, port);
     let listener = TcpListener::bind(socket).unwrap();
 
     let global_gs = Arc::new(game_state);

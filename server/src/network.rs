@@ -4,13 +4,13 @@ use generic_array::GenericArray;
 use rand::Rng;
 use rand_core::OsRng;
 use serde_json::json;
-use std::error;
+use std::{error};
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Write};
-use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
+use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream, Shutdown};
 use std::sync::{Arc, Mutex, mpsc, RwLock};
 use std::thread;
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use x25519_dalek::{PublicKey, ReusableSecret};
 use rayon::prelude::*;
 use std::sync::mpsc::channel;
@@ -25,12 +25,6 @@ pub struct NetworkInfo {
     secret_key: ReusableSecret,
 }
 
-fn generate_keypair() -> (PublicKey, ReusableSecret) {
-    let secret = ReusableSecret::new(OsRng);
-    let public = PublicKey::from(&secret);
-    (public, secret)
-}
-
 pub fn tcp_server(game_state: Mutex<GameState>, port: u16) {
     let loopback = Ipv4Addr::new(0, 0, 0, 0);
     let socket = SocketAddrV4::new(loopback, port);
@@ -40,15 +34,15 @@ pub fn tcp_server(game_state: Mutex<GameState>, port: u16) {
     let global_lobby = Arc::new(Mutex::new(LobbyState::new()));
 
     println!("Listening on {}", socket);
-
-    let global_net_infos: Vec<Arc<RwLock<NetworkInfo>>> = Vec::new();
     let (tx, rx) = channel();
 
     //Spin off a thread to wait for broadcast messages and send them to all clients
-    let arc_net_infos = Arc::new(RwLock::new(global_net_infos));
-    let net_infos = Arc::clone(&arc_net_infos);
+    let arc_net_infos = Arc::new(RwLock::new(Vec::new()));
 
-    thread::spawn(move || check_send_broadcast_messages(&net_infos, rx));
+    {
+        let net_infos = Arc::clone(&arc_net_infos);
+        thread::spawn(move || check_send_broadcast_messages(&net_infos, rx));
+    }
 
     loop {
         let (public_key, secret_key) = generate_keypair();
@@ -85,6 +79,12 @@ pub fn tcp_server(game_state: Mutex<GameState>, port: u16) {
     }
 }
 
+fn generate_keypair() -> (PublicKey, ReusableSecret) {
+    let secret = ReusableSecret::new(OsRng);
+    let public = PublicKey::from(&secret);
+    (public, secret)
+}
+
 fn handle_message(
     msg: serde_json::Value,
     game_state: &Arc<Mutex<GameState>>,
@@ -106,7 +106,7 @@ fn check_send_broadcast_messages(
     net_infos: &Arc<RwLock<Vec<Arc<RwLock<NetworkInfo>>>>>,
     rx: mpsc::Receiver<serde_json::Value>,
 ) {
-
+    //TODO remove disconnected clients from net_infos
     loop {
         if let Ok(msg) = rx.recv() {
             net_infos.write().unwrap().par_iter_mut().for_each(|net_info| {
@@ -117,8 +117,7 @@ fn check_send_broadcast_messages(
 }
 
 fn check_checksum(ciphertext: &[u8], checksum: u32) -> bool {
-    let checksum_calc = crc32fast::hash(ciphertext);
-    checksum == checksum_calc
+    checksum == crc32fast::hash(ciphertext)
 }
 
 fn read_tcp_message(
@@ -137,7 +136,6 @@ fn read_tcp_message(
 
         msg_buf = vec![0; msg_size];
         net_info.tcp_stream.read_exact(&mut msg_buf)?;
-
         cipher = ChaCha20Poly1305::new(&net_info.key);
     }
 
@@ -154,13 +152,8 @@ fn read_tcp_message(
     }
 
     let json_message = match cipher.decrypt(&nonce, ciphertext) {
-        Ok(plaintext) => {
-            serde_json::from_slice(&plaintext)?
-        }
-        Err(_) => {
-            println!("Decryption failed!");
-            return Err(Box::new(Error::new(ErrorKind::Other, "Decryption failed!")));
-        }
+        Ok(plaintext) => serde_json::from_slice(&plaintext)?,
+        Err(_) => return Err(Box::new(Error::new(ErrorKind::Other, "Decryption failed!"))),
     };
 
     Ok(json_message)
@@ -169,17 +162,11 @@ fn read_tcp_message(
 
 fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8>, u32) {
     let nonce = *Nonce::from_slice(rand::thread_rng().gen::<[u8; 12]>().as_slice());
-    let cipher = ChaCha20Poly1305::new(&shared_key);
-
-    let ciphertext = cipher
-        .encrypt(&nonce, &json_message[..])
-        .expect("encryption failure!");
-
+    let ciphertext = ChaCha20Poly1305::new(&shared_key).encrypt(&nonce, &json_message[..]).expect("encryption failure!");
     let checksum = crc32fast::hash(&ciphertext);
 
     //Add 12 bytes for the nonce and 4 bytes for the checksum
     let msg_size = ciphertext.len() + 16;
-
     (msg_size, nonce, ciphertext, checksum)
 }
 
@@ -190,6 +177,7 @@ fn client_disconnected(net_info: &Arc<RwLock<NetworkInfo>>, game_state: &Arc<Mut
     game_state.remove_player(net_info.username.to_string());
     let mut lobby = lobby.lock().unwrap();
     lobby.remove_player(net_info.username.to_string());
+    let _ = net_info.tcp_stream.shutdown(Shutdown::Both);
 }
 
 fn send_tcp_message(
@@ -222,15 +210,27 @@ fn send_message(net_info: &Arc<RwLock<NetworkInfo>>, msg: &serde_json::Value) ->
     }
 }
 
+//Returns false if client is disconnected otherwise true
+fn send_ping_message(net_info: &Arc<RwLock<NetworkInfo>>, time_elapsed: Duration) -> Option<bool> {
+    if time_elapsed.as_secs() > 30 {
+        match send_message(net_info, &json!({"kind": "ping"})) {
+            Ok(_) => Some(true),
+            Err(_) => Some(false)
+        }
+    } else {
+        None
+    }
+}
+
 fn handle_client(
     net_info: Arc<RwLock<NetworkInfo>>,
     game_state: Arc<Mutex<GameState>>,
     lobby_state: Arc<Mutex<LobbyState>>,
     tx: mpsc::Sender<serde_json::Value>,
 ) {
+
     {
         let mut net_info = net_info.write().unwrap();
-
         let _ = net_info
             .tcp_stream
             .set_read_timeout(Some(Duration::from_millis(50)));
@@ -255,31 +255,25 @@ fn handle_client(
             lobby_state.add_player(username);
             let _ = tx.send(json!(&*lobby_state));
         }
-    }
+    }  
 
-    let mut counter = 500;
+    let mut keepalive = Instant::now();
 
     loop {
         if let Ok(msg) = read_tcp_message(&net_info) {
             handle_message(msg, &game_state, &lobby_state, &tx);
         }
 
-        sleep(Duration::from_millis(100));
-
-        //TODO: Move to a function
-        counter -= 1;
-        if counter == 0 {
-            let ping_msg = json!({"kind": "ping"});
-            let alive = send_message(&net_info, &ping_msg);
-            match alive {
-                Ok(_) => {
-                    counter = 500;
-                }
-                Err(_) => {
-                    client_disconnected(&net_info, &game_state, &lobby_state);
-                    break;
-                }
-            }
+        match send_ping_message(&net_info, Instant::now().duration_since(keepalive)) {
+            Some(false) => {
+                client_disconnected(&net_info, &game_state, &lobby_state);
+                break;
+            },
+            Some(true) => keepalive = Instant::now(),
+            None => {},
         }
+
+        sleep(Duration::from_millis(100));
+        
     }
 }

@@ -1,9 +1,18 @@
-use egui::{TextStyle, ScrollArea};
+use egui::{TextStyle, ScrollArea, Key, Modifiers};
 use serde_json::json;
 use crate::network::*;
-
 use crate::Painting;
 
+pub enum Event {
+    Copy,
+    Cut,
+    Text(String),
+    Key {
+        key: Key,
+        pressed: bool,
+        modifiers: Modifiers,
+    },
+}
 pub struct TemplateApp {
     // Example stuff:
     name: String,
@@ -73,7 +82,7 @@ impl eframe::App for TemplateApp {
                 ui.horizontal(|ui| {
                     ui.label("Chat: ");
                     ui.text_edit_singleline(message);
-                    if ui.button("Send").clicked() {
+                    if ui.button("Send").clicked() || (ui.input().key_pressed(Key::Enter) && !message.is_empty()) {
                         let msg = json!({
                             "kind": "chat_message",
                             "username": name.to_string(),
@@ -118,7 +127,7 @@ impl eframe::App for TemplateApp {
                 ui.text_edit_singleline(name);
 
                 //Get the name and connect to the server
-                if ui.button("Connect").clicked() {
+                if ui.button("Connect").clicked() || ui.input().key_pressed(Key::Enter){
                      let res = connect_to_server("127.0.0.1", 3000, name);
                         match res {
                             Ok(info) => {

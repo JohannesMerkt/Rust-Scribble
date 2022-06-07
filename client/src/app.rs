@@ -45,7 +45,7 @@ impl eframe::App for TemplateApp {
         {
             //Read a message from the network
             if let Some(network_info) = net_info.as_mut() {
-                if let Ok(msg)= read_tcp_message(network_info) {
+                if let Ok(msg)= read_message(network_info) {
                     handle_message(msg, chat_messages);
                 }
             }
@@ -143,16 +143,18 @@ impl eframe::App for TemplateApp {
             });
         }
 
-        fn handle_message(msg: serde_json::Value, chat_messages: &mut Vec<String>) {
+        fn handle_message(msg: Vec<serde_json::Value>, chat_messages: &mut Vec<String>) {
             //TODO handle messages 
-            println!("{}", msg);
+            for m in msg {
+                println!("{}", m);
 
-            //Display message in the chat window
-            if msg["kind"].eq("chat_message") {
-                let message = msg["message"].as_str().unwrap();
-                let username = msg["username"].as_str().unwrap();
-                chat_messages.push(format!("{}: {}", username, message));
-                println!("{} says: {}", username, message);
+                //Display message in the chat window
+                if m["kind"].eq("chat_message") {
+                    let message = m["message"].as_str().unwrap();
+                    let username = m["username"].as_str().unwrap();
+                    chat_messages.push(format!("{}: {}", username, message));
+                    println!("{} says: {}", username, message);
+                }
             }
         }
     }

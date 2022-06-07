@@ -217,7 +217,7 @@ fn read_tcp_message(
 /// * `share_key` - The shared key to be used for encryption.
 /// 
 /// # Returns
-/// * `(msg_size, msg, checksum)` - A tuple with the size of the whole message(inclusive nonce, checksum, and message), nonce, the encrypted message and the checksum.
+/// * `(msg_size, nonce,  ciphermsg, checksum)` - A tuple with the size of the whole message(inclusive nonce, checksum, and message), nonce, the encrypted message and the checksum.
 ///
 fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8>, u32) {
     let nonce = *Nonce::from_slice(rand::thread_rng().gen::<[u8; 12]>().as_slice());
@@ -295,7 +295,16 @@ fn send_message(net_info: &Arc<RwLock<NetworkInfo>>, msg: &serde_json::Value) ->
     }
 }
 
-//Returns false if client is disconnected otherwise true
+/// Send a JSON message to check if the client is still connected.
+/// 
+/// # Arguments
+/// * `net_info` - The network information of the client.
+/// *`time_elapsed` - The time since the last ping.
+/// 
+/// # Returns
+/// * `Some(bool)` - True if the client is still connected, false if not.
+/// * `None` - There was no ping sent.
+/// 
 fn send_ping_message(net_info: &Arc<RwLock<NetworkInfo>>, time_elapsed: Duration) -> Option<bool> {
     if time_elapsed.as_secs() > 30 {
         match send_message(net_info, &json!({"kind": "ping"})) {
@@ -307,6 +316,18 @@ fn send_ping_message(net_info: &Arc<RwLock<NetworkInfo>>, time_elapsed: Duration
     }
 }
 
+/// The Main loop to handle each individual clients
+/// 
+/// This function is should be run in a separate thread.
+/// This function reads in the username and create the 
+/// shared secret for the client and server to communicate
+/// 
+/// # Arguments
+/// * `net_info` - The network information of the client.
+/// * `game_state` - The current game_state.
+/// * `lobby_state` - The lobby state.
+/// * `tx` - The channel to send messages to the broadcase thread.
+/// 
 fn handle_client(
     net_info: Arc<RwLock<NetworkInfo>>,
     game_state: Arc<Mutex<GameState>>,
@@ -344,9 +365,11 @@ fn handle_client(
 
     let mut keepalive = Instant::now();
 
+    //Start of the main loop to read messages and send keepalive pings
     loop {
         if let Ok(msg) = read_tcp_message(&net_info) {
             handle_message(msg, &game_state, &lobby_state, &tx);
+            keepalive = Instant::now();
         }
 
         match send_ping_message(&net_info, Instant::now().duration_since(keepalive)) {
@@ -357,8 +380,6 @@ fn handle_client(
             Some(true) => keepalive = Instant::now(),
             None => {},
         }
-
-        sleep(Duration::from_millis(100));
         
     }
 }

@@ -1,4 +1,8 @@
 use egui::*;
+use serde_json::json;
+use crate::network::*;
+
+use crate::network::NetworkInfo;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct Painting{
@@ -8,14 +12,14 @@ pub struct Painting{
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct Line {
-    position: Vec<Pos2>,
-    stroke: Stroke,
+    pub position: Vec<Pos2>,
+    pub stroke: Stroke,
 }
 
 impl Default for Line {
     fn default() -> Self {
         Self {
-            position: Default::default(),
+            position: Vec::new(),
             stroke: Stroke::new(1.0, Color32::from_rgb(25, 200, 100)),
         }
     }
@@ -56,7 +60,7 @@ impl Painting {
         .response
     }
 
-    pub fn ui_content(&mut self, ui: &mut Ui) -> egui::Response {
+    pub fn ui_content(&mut self, ui: &mut Ui, net_info: &mut Option<NetworkInfo>) -> egui::Response {
         let (mut response, painter) =
             ui.allocate_painter(ui.available_size_before_wrap(), Sense::drag());
 
@@ -79,8 +83,24 @@ impl Painting {
                 response.mark_changed();
             }
         } else if !current_line.position.is_empty() {
-            let test = Line { position: vec![], stroke: current_line.stroke};
-            self.all_lines.push(test);
+            let x_values: Vec<f32> = current_line.position.iter().map(|pos2| pos2.x).collect();
+            let y_values: Vec<f32> = current_line.position.iter().map(|pos2| pos2.y).collect();
+            let width = current_line.stroke.width;
+            let color = current_line.stroke.color;
+            let msg = json!({
+                "kind": "add_line",
+                "line": {
+                    "posx": x_values,
+                    "posy": y_values,
+                    "width": width,
+                    "color": color,
+                }
+            });
+            if let Some(network_info) = net_info.as_mut() {
+                let _ = send_message(network_info, msg);
+            }
+            let new_line = Line { position: vec![], stroke: current_line.stroke};
+            self.all_lines.push(new_line);
             response.mark_changed();
         }
 
@@ -96,12 +116,12 @@ impl Painting {
         response
     }
 
-    pub fn ui(&mut self, ui: &mut Ui) {
+    pub fn ui(&mut self, ui: &mut Ui, net_info: &mut Option<NetworkInfo>) {
         self.ui_control(ui);
         egui::warn_if_debug_build(ui);
         ui.label("Paint with your mouse/touch!");
         Frame::canvas(ui.style()).show(ui, |ui| {
-            self.ui_content(ui);
+            self.ui_content(ui, net_info);
         });
     }
 }

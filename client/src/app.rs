@@ -1,18 +1,10 @@
-use egui::{TextStyle, ScrollArea, Key, Modifiers};
+use egui::{Pos2, Color32};
+use egui::{TextStyle, ScrollArea, Key};
 use serde_json::json;
 use crate::network::*;
 use crate::Painting;
+use crate::painting;
 
-pub enum Event {
-    Copy,
-    Cut,
-    Text(String),
-    Key {
-        key: Key,
-        pressed: bool,
-        modifiers: Modifiers,
-    },
-}
 pub struct TemplateApp {
     // Example stuff:
     name: String,
@@ -55,7 +47,7 @@ impl eframe::App for TemplateApp {
             //Read a message from the network
             if let Some(network_info) = net_info.as_mut() {
                 if let Ok(msg)= read_tcp_message(network_info) {
-                    handle_message(msg, chat_messages);
+                    handle_message(msg, chat_messages, painting);
                 }
             }
         }
@@ -117,7 +109,7 @@ impl eframe::App for TemplateApp {
             });
             egui::CentralPanel::default().show(ctx, |ui| {
                 // The central panel the region left after adding TopPanel's and SidePanel's
-                painting.ui(ui);
+                painting.ui(ui, net_info);
             });
         } else {
             egui::CentralPanel::default().show(ctx, |ui| {
@@ -152,7 +144,7 @@ impl eframe::App for TemplateApp {
             });
         }
 
-        fn handle_message(msg: serde_json::Value, chat_messages: &mut Vec<String>) {
+        fn handle_message(msg: serde_json::Value, chat_messages: &mut Vec<String>, painting: &mut Painting) {
             //TODO handle messages 
             println!("{}", msg);
 
@@ -162,6 +154,23 @@ impl eframe::App for TemplateApp {
                 let username = msg["username"].as_str().unwrap();
                 chat_messages.push(format!("{}: {}", username, message));
                 println!("{} says: {}", username, message);
+            } else if msg["kind"].eq("add_line") {
+                let posx:Vec<f64> = msg["line"]["posx"].as_array().unwrap().iter().map(|pos| pos.as_f64().unwrap()).collect();
+                let posy:Vec<f64> = msg["line"]["posy"].as_array().unwrap().iter().map(|pos| pos.as_f64().unwrap()).collect();
+                let mut pos_line: Vec<Pos2> = Vec::new();
+                for pos in 0..posx.len() {
+                    let pos2 = Pos2{x:posx[pos] as f32, y:posy[pos] as f32};
+                    pos_line.push(pos2);
+                }
+                let width = msg["line"]["width"].as_f64().unwrap();
+                let color_values: Vec<u8> = msg["line"]["color"].as_array().unwrap().iter().map(|col| col.as_u64().unwrap() as u8).collect();
+                let color = Color32::from_rgb(color_values[0], color_values[1], color_values[2]);
+                let line: painting::Line = painting::Line {
+                    position: pos_line,
+                    stroke: egui::Stroke::new(width as f32, color),
+                };
+                painting.all_lines.insert(painting.all_lines.len() - 1, line);
+
             }
         }
     }

@@ -173,8 +173,8 @@ impl eframe::App for TemplateApp {
                         stroke: egui::Stroke::new(width as f32, color),
                     };
                     painting.all_lines.insert(painting.all_lines.len() - 1, line);
+                }
             }
         }
     }
-}
 }

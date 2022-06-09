@@ -18,13 +18,26 @@ use std::sync::mpsc::channel;
 use crate::gamestate::GameState;
 use crate::lobby::LobbyState;
 
+/// Contains all the information about a client connection.
 pub struct NetworkInfo {
+    /// The name of the client.
     username: String,
+    /// The tcp_stream of the client.
     tcp_stream: TcpStream,
+    /// The public key of the client.
     key: Key,
+    /// The shared secret of the client and server.
     secret_key: ReusableSecret,
 }
 
+
+/// Runs the listining server for incoming connections.
+/// Starts a new thread for each incoming connection
+///
+/// # Arguments
+/// * `game_state` - The game state to be updated.
+/// * `port` - The port to listen on.
+///
 pub fn tcp_server(game_state: Mutex<GameState>, port: u16) {
     let loopback = Ipv4Addr::new(0, 0, 0, 0);
     let socket = SocketAddrV4::new(loopback, port);
@@ -79,12 +92,26 @@ pub fn tcp_server(game_state: Mutex<GameState>, port: u16) {
     }
 }
 
+/// Generates a new Public Private keypair.
+/// 
+/// # Returns
+/// * `public_key` - A public key.
+/// * `secret_key` - A secret key.
+/// 
 fn generate_keypair() -> (PublicKey, ReusableSecret) {
     let secret = ReusableSecret::new(OsRng);
     let public = PublicKey::from(&secret);
     (public, secret)
 }
 
+/// Handles a client message.
+/// 
+/// # Arguments
+/// * `msg` - The message to be handled in JSON format.
+/// * `game_state` - The current game_state which can be updated if necessary.
+/// * `lobby_state` - The lobby state which can be updated if necessary.
+/// * `tx` - The channel to send broadcast messages to, that will then send to all clients.
+/// 
 fn handle_message(
     msg: serde_json::Value,
     game_state: &Arc<Mutex<GameState>>,
@@ -104,6 +131,13 @@ fn handle_message(
     }
 }
 
+/// Loop listening for waiting on MPSC channel and handle sending broadcast messages
+/// This function will run in a separate thread.
+/// 
+/// # Arguments
+/// * `net_infos` - Vector of all the network information of each client.
+/// * `rx` - The channel to receive broadcast messages from.
+/// 
 fn check_send_broadcast_messages(
     net_infos: &Arc<RwLock<Vec<Arc<RwLock<NetworkInfo>>>>>,
     rx: mpsc::Receiver<serde_json::Value>,
@@ -118,10 +152,25 @@ fn check_send_broadcast_messages(
     }
 }
 
+/// Verifies if the checksum of the chipher text is correct.
+/// 
+/// # Arguments
+/// * `cipher_text` - The cipher text to be verified.
+/// * `checksum` - The checksum to be verified.
+/// 
 fn check_checksum(ciphertext: &[u8], checksum: u32) -> bool {
     checksum == crc32fast::hash(ciphertext)
 }
 
+/// Reads a tcp_message from the client.
+/// 
+/// # Arguments
+/// * `net_info` - The network information of the client.
+/// 
+/// # Returns
+/// * `Ok(msg)` - The message read from the client in JSON format.
+/// * `Err(e)` - The error that occured.
+/// 
 fn read_tcp_message(
     net_info: &Arc<RwLock<NetworkInfo>>,
 ) -> Result<serde_json::Value, Box<dyn error::Error>> {
@@ -162,6 +211,16 @@ fn read_tcp_message(
 
 }
 
+
+/// Encrypts a JSON message
+/// 
+/// # Arguments
+/// * `json_message` - The message to be encrypted.
+/// * `share_key` - The shared key to be used for encryption.
+/// 
+/// # Returns
+/// * `(msg_size, nonce,  ciphermsg, checksum)` - A tuple with the size of the whole message(inclusive nonce, checksum, and message), nonce, the encrypted message and the checksum.
+///
 fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8>, u32) {
     let nonce = *Nonce::from_slice(rand::thread_rng().gen::<[u8; 12]>().as_slice());
     let ciphertext = ChaCha20Poly1305::new(&shared_key).encrypt(&nonce, &json_message[..]).expect("encryption failure!");
@@ -172,6 +231,13 @@ fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8
     (msg_size, nonce, ciphertext, checksum)
 }
 
+/// Removes a disconnected client from the lobby, gamestate and closes the tcp_stream.
+/// 
+/// # Arguments
+/// * `net_info` - The network information of the client.
+/// * `game_state` - The current game_state.
+/// * `lobby` - The lobby state.
+/// 
 fn client_disconnected(net_info: &Arc<RwLock<NetworkInfo>>, game_state: &Arc<Mutex<GameState>>, lobby: &Arc<Mutex<LobbyState>>) {
     let net_info = net_info.read().unwrap();
     println!("Client {:?} disconnected", net_info.username);
@@ -182,6 +248,16 @@ fn client_disconnected(net_info: &Arc<RwLock<NetworkInfo>>, game_state: &Arc<Mut
     let _ = net_info.tcp_stream.shutdown(Shutdown::Both);
 }
 
+/// Sends a message to a client.
+/// 
+/// # Arguments
+/// * `tcp_stream` - The tcp_stream of the client.
+/// * `net_msg: (usize, Nonce, Vec<u8>, u32)` - The prepared encrypted tuple from encrypt_json() to be sent to the client
+/// 
+/// # Returns
+/// * `Ok(())` - The message was sent successfully.
+/// * `Err(e)` - The error that occured.
+/// 
 fn send_tcp_message(
     tcp_stream: &mut TcpStream,
     net_msg: (usize, Nonce, Vec<u8>, u32),
@@ -194,6 +270,15 @@ fn send_tcp_message(
     Ok(())
 }
 
+/// Send a JSON message to a client.
+/// 
+/// # Arguments
+/// * `net_info` - The network information of the client.
+/// * `msg` - The message to be sent.
+/// 
+/// # Returns
+/// * `Ok(())` - This function is always successful.
+/// 
 fn send_message(net_info: &Arc<RwLock<NetworkInfo>>, msg: &serde_json::Value) -> Result<(), Error> {
     //Don't send messages generated by user to the user
     match net_info.write() {
@@ -212,7 +297,16 @@ fn send_message(net_info: &Arc<RwLock<NetworkInfo>>, msg: &serde_json::Value) ->
     }
 }
 
-//Returns false if client is disconnected otherwise true
+/// Send a JSON message to check if the client is still connected.
+/// 
+/// # Arguments
+/// * `net_info` - The network information of the client.
+/// *`time_elapsed` - The time since the last ping.
+/// 
+/// # Returns
+/// * `Some(bool)` - True if the client is still connected, false if not.
+/// * `None` - There was no ping sent.
+/// 
 fn send_ping_message(net_info: &Arc<RwLock<NetworkInfo>>, time_elapsed: Duration) -> Option<bool> {
     if time_elapsed.as_secs() > 30 {
         match send_message(net_info, &json!({"kind": "ping"})) {
@@ -224,6 +318,18 @@ fn send_ping_message(net_info: &Arc<RwLock<NetworkInfo>>, time_elapsed: Duration
     }
 }
 
+/// The Main loop to handle each individual clients
+/// 
+/// This function is should be run in a separate thread.
+/// This function reads in the username and create the 
+/// shared secret for the client and server to communicate
+/// 
+/// # Arguments
+/// * `net_info` - The network information of the client.
+/// * `game_state` - The current game_state.
+/// * `lobby_state` - The lobby state.
+/// * `tx` - The channel to send messages to the broadcase thread.
+/// 
 fn handle_client(
     net_info: Arc<RwLock<NetworkInfo>>,
     game_state: Arc<Mutex<GameState>>,
@@ -261,9 +367,11 @@ fn handle_client(
 
     let mut keepalive = Instant::now();
 
+    //Start of the main loop to read messages and send keepalive pings
     loop {
         if let Ok(msg) = read_tcp_message(&net_info) {
             handle_message(msg, &game_state, &lobby_state, &tx);
+            keepalive = Instant::now();
         }
 
         match send_ping_message(&net_info, Instant::now().duration_since(keepalive)) {
@@ -274,8 +382,6 @@ fn handle_client(
             Some(true) => keepalive = Instant::now(),
             None => {},
         }
-
-        sleep(Duration::from_millis(100));
         
     }
 }

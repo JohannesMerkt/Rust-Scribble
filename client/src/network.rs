@@ -12,18 +12,37 @@ use std::time::Duration;
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
 
+/// Contains all the information about a client connection.
 pub struct NetworkInfo {
+    /// The name of the client.
     username: String,
+    /// The tcp_stream of the client.
     tcp_stream: TcpStream,
+    /// The shared secret of the client and server.
     key: Key,
 }
 
+/// Generates a new Public Private keypair.
+/// 
+/// # Returns
+/// * `public_key` - A public key.
+/// * `secret_key` - A secret key.
+/// 
 fn generate_keypair() -> (PublicKey, EphemeralSecret) {
     let secret = EphemeralSecret::new(OsRng);
     let public = PublicKey::from(&secret);
     (public, secret)
 }
 
+/// Encrypts a JSON message
+/// 
+/// # Arguments
+/// * `json_message` - The message to be encrypted.
+/// * `share_key` - The shared key to be used for encryption.
+/// 
+/// # Returns
+/// * `(msg_size, nonce,  ciphermsg, checksum)` - A tuple with the size of the whole message(inclusive nonce, checksum, and message), nonce, the encrypted message and the checksum.
+///
 fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8>, u32) {
     let nonce = *Nonce::from_slice(rand::thread_rng().gen::<[u8; 12]>().as_slice());
     let cipher = ChaCha20Poly1305::new(&shared_key);
@@ -40,11 +59,27 @@ fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8
     (msg_size, nonce, ciphertext, checksum)
 }
 
+/// Verifies if the checksum of the chipher text is correct.
+/// 
+/// # Arguments
+/// * `cipher_text` - The cipher text to be verified.
+/// * `checksum` - The checksum to be verified.
+/// 
 fn check_checksum(ciphertext: &[u8], checksum: u32) -> bool {
     let checksum_calc = crc32fast::hash(ciphertext);
     checksum == checksum_calc
 }
 
+/// Sends a message to a client.
+/// 
+/// # Arguments
+/// * `tcp_stream` - The tcp_stream of the client.
+/// * `net_msg: (usize, Nonce, Vec<u8>, u32)` - The prepared encrypted tuple from encrypt_json() to be sent to the client
+/// 
+/// # Returns
+/// * `Ok(())` - The message was sent successfully.
+/// * `Err(e)` - The error that occured.
+/// 
 fn send_tcp_message(
     tcp_stream: &mut TcpStream,
     net_msg: (usize, Nonce, Vec<u8>, u32),
@@ -57,7 +92,16 @@ fn send_tcp_message(
     Ok(())
 }
 
-// Take message and assemble a json object to send to the server.
+/// Sends a JSON message to the server
+/// 
+/// # Arguments
+/// * `net_info` - The network information of the client.
+/// * `msg` - The message JSON Value to be sent.
+/// 
+/// # Returns
+/// * `Ok(())` - The message was sent successfully.
+/// * `Err(e)` - The error that occured.
+/// 
 pub fn send_message(net_info: &mut NetworkInfo, msg: Value) -> Result<(), Error> {
     send_tcp_message(
         &mut net_info.tcp_stream,
@@ -65,7 +109,61 @@ pub fn send_message(net_info: &mut NetworkInfo, msg: Value) -> Result<(), Error>
     )
 }
 
-pub fn read_tcp_message(
+/// Try and read a message from the server
+/// 
+/// # Arguments
+/// * `net_info` - A mutable reference to the NetworkInfo struct
+/// 
+/// # Returns
+/// * `Ok(messages) - A vector of JSON value messages
+/// * `Err(error) - An error if something went wrong
+/// 
+pub fn read_message(
+     net_info: &mut NetworkInfo,
+) -> Result<Vec<serde_json::Value>, Box<dyn error::Error>> {
+    read_messages(net_info, 1)
+}
+
+/// Try and read messages from the server
+/// 
+/// # Arguments
+/// * `net_info` - A mutable reference to the NetworkInfo struct
+/// * `number_of_messages` - The number of messages to try and read. 
+/// 
+/// # Returns
+/// * `Ok(messages) - A vector of JSON value messages
+/// * `Err(error) - An error if something went wrong
+/// 
+pub fn read_messages(
+    net_info: &mut NetworkInfo,
+    n_msg_to_read: u8,
+) -> Result<Vec<serde_json::Value>, Box<dyn error::Error>> {
+    
+    let mut messages = Vec::new();
+    for _ in 0..=n_msg_to_read {
+        match read_tcp_message(net_info) {
+            Ok(msg) => {
+                messages.push(msg);
+            }
+            Err(_) => {
+                break;
+            }
+        }
+    }
+
+    Ok(messages)
+}
+
+/// Reads a tcp_message from the server
+/// 
+/// # Arguments
+/// * `net_info` - The network information of the client.
+/// 
+/// # Returns
+/// * `Ok(msg)` - The message read from the client in JSON format.
+/// * `Err(e)` - The error that occured.
+/// 
+fn read_tcp_message(
     net_info: &mut NetworkInfo,
 ) -> Result<serde_json::Value, Box<dyn error::Error>> {
     let mut size = [0; (usize::BITS / 8) as usize];
@@ -102,6 +200,21 @@ pub fn read_tcp_message(
     Ok(json_message)
 }
 
+
+/// Connects to the server and returns a NetworkInfo struct
+/// 
+/// Attempts to connect to the server and generate a 
+/// shared key for encrypted communication with the server.
+/// 
+/// # Arguments
+/// * `ip_addr` - The address of the server.
+/// * `port` - The port of the server.
+/// * `username` - The username of the client.
+/// 
+/// # Returns
+/// * `Ok(net_info)` - A NetworkInfo struct containing the tcp_stream and the key.
+/// * `Err(e)` - The error that occured.
+/// 
 pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<NetworkInfo, Error> {
     let (public_key, secret_key) = generate_keypair();
 

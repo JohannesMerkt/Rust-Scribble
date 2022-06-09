@@ -46,7 +46,9 @@ impl eframe::App for TemplateApp {
         {
             //Read a message from the network
             if let Some(network_info) = net_info.as_mut() {
-                if let Ok(msg)= read_tcp_message(network_info) {
+                // if let Ok(msg)= read_tcp_message(network_info) {
+                //     handle_message(msg, chat_messages, painting);
+                if let Ok(msg)= read_message(network_info) {
                     handle_message(msg, chat_messages, painting);
                 }
             }
@@ -144,35 +146,35 @@ impl eframe::App for TemplateApp {
             });
         }
 
-        fn handle_message(msg: serde_json::Value, chat_messages: &mut Vec<String>, painting: &mut Painting) {
+        fn handle_message(msg: Vec<serde_json::Value>, chat_messages: &mut Vec<String>, painting: &mut Painting) {
             //TODO handle messages 
-            println!("{}", msg);
+            for m in msg {
+                println!("{}", m);
 
-            //Display message in the chat window
-            if msg["kind"].eq("chat_message") {
-                let message = msg["message"].as_str().unwrap();
-                let username = msg["username"].as_str().unwrap();
-                chat_messages.push(format!("{}: {}", username, message));
-                println!("{} says: {}", username, message);
-            } else if msg["kind"].eq("add_line") {
-                let posx:Vec<f64> = msg["line"]["posx"].as_array().unwrap().iter().map(|pos| pos.as_f64().unwrap()).collect();
-                let posy:Vec<f64> = msg["line"]["posy"].as_array().unwrap().iter().map(|pos| pos.as_f64().unwrap()).collect();
-                let mut pos_line: Vec<Pos2> = Vec::new();
-                for pos in 0..posx.len() {
-                    let pos2 = Pos2{x:posx[pos] as f32, y:posy[pos] as f32};
-                    pos_line.push(pos2);
-                }
-                let width = msg["line"]["width"].as_f64().unwrap();
-                let color_values: Vec<u8> = msg["line"]["color"].as_array().unwrap().iter().map(|col| col.as_u64().unwrap() as u8).collect();
-                let color = Color32::from_rgb(color_values[0], color_values[1], color_values[2]);
-                let line: painting::Line = painting::Line {
-                    position: pos_line,
-                    stroke: egui::Stroke::new(width as f32, color),
-                };
-                painting.all_lines.insert(painting.all_lines.len() - 1, line);
-
+                //Display message in the chat window
+                if m["kind"].eq("chat_message") {
+                    let message = m["message"].as_str().unwrap();
+                    let username = m["username"].as_str().unwrap();
+                    chat_messages.push(format!("{}: {}", username, message));
+                    println!("{} says: {}", username, message);
+                } else if m["kind"].eq("add_line") {
+                    let posx:Vec<f64> = m["line"]["posx"].as_array().unwrap().iter().map(|pos| pos.as_f64().unwrap()).collect();
+                    let posy:Vec<f64> = m["line"]["posy"].as_array().unwrap().iter().map(|pos| pos.as_f64().unwrap()).collect();
+                    let mut pos_line: Vec<Pos2> = Vec::new();
+                    for pos in 0..posx.len() {
+                        let pos2 = Pos2{x:posx[pos] as f32, y:posy[pos] as f32};
+                        pos_line.push(pos2);
+                    }
+                    let width = m["line"]["width"].as_f64().unwrap();
+                    let color_values: Vec<u8> = m["line"]["color"].as_array().unwrap().iter().map(|col| col.as_u64().unwrap() as u8).collect();
+                    let color = Color32::from_rgb(color_values[0], color_values[1], color_values[2]);
+                    let line: painting::Line = painting::Line {
+                        position: pos_line,
+                        stroke: egui::Stroke::new(width as f32, color),
+                    };
+                    painting.all_lines.insert(painting.all_lines.len() - 1, line);
             }
         }
     }
 }
-
+}

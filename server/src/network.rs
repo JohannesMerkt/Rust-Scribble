@@ -99,6 +99,8 @@ fn handle_message(
         let mut lobby = lobby.lock().unwrap();
         lobby.set_ready(msg["username"].to_string(), msg["ready"].as_bool().unwrap());
         let _ = tx.send(json!(&*lobby));
+    } else if msg["kind"].eq("add_line") {
+        let _ = tx.send(msg);
     }
 }
 

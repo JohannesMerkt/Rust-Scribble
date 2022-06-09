@@ -169,7 +169,7 @@ fn read_tcp_message(
     let mut size = [0; (usize::BITS / 8) as usize];
     net_info.tcp_stream.read_exact(&mut size)?;
     let msg_size: usize = usize::from_le_bytes(size);
-
+    
     let mut msg_buf = vec![0; msg_size];
     net_info.tcp_stream.read_exact(&mut msg_buf)?;
 
@@ -233,7 +233,7 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
 
         let shared_secret = secret_key.diffie_hellman(&server_key);
         let key: chacha20poly1305::Key = *Key::from_slice(shared_secret.as_bytes());
-
+        
         Ok(NetworkInfo {
             username: username.to_string(),
             tcp_stream,

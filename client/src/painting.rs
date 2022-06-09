@@ -40,13 +40,13 @@ impl Painting {
             let epaint::Stroke { width, color } = &mut self.all_lines.last_mut().unwrap().stroke;
             ui.add(Slider::new(width, 1.0..=10.0).text("width"));
             if ui.color_edit_button_srgba(&mut self.curr_stroke.color).clicked_elsewhere() {
-                *color = self.curr_stroke.color.clone();
+                *color = self.curr_stroke.color;
             };
             if ui.button("Eraser").clicked() {
                 *color = Color32::from_rgb(255,255,255); 
             }
             if ui.button("Color").clicked() {
-                *color = self.curr_stroke.color.clone();
+                *color = self.curr_stroke.color;
             }
             let (_id, stroke_rect) = ui.allocate_space(ui.spacing().interact_size);
             let left = stroke_rect.left_center();

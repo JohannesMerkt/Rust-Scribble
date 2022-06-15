@@ -4,6 +4,7 @@ use generic_array::GenericArray;
 use rand::Rng;
 use rand_core::OsRng;
 use serde_json::json;
+use std::rc::Rc;
 use std::{error};
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream, Shutdown};
@@ -51,10 +52,8 @@ pub fn tcp_server(game_state: Mutex<GameState>, port: u16) {
     //Spin off a thread to wait for broadcast messages and send them to all clients
     let arc_net_infos = Arc::new(RwLock::new(Vec::new()));
 
-    {
-        let net_infos = Arc::clone(&arc_net_infos);
-        thread::spawn(move || check_send_broadcast_messages(&net_infos, rx));
-    }
+    let net_infos = Arc::clone(&arc_net_infos);
+    thread::spawn(move || check_send_broadcast_messages(&net_infos, rx));
 
     loop {
         let (public_key, secret_key) = generate_keypair();
@@ -137,11 +136,28 @@ fn check_send_broadcast_messages(
     rx: mpsc::Receiver<serde_json::Value>,
 ) {
     //TODO remove disconnected clients from net_infos
+    let remove_clients: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+
     loop {
         if let Ok(msg) = rx.recv() {
             net_infos.write().unwrap().par_iter_mut().for_each(|net_info| {
-                let _ = send_message(net_info, &msg);
+                match send_message(net_info, &msg) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        remove_clients.lock().unwrap().push(net_info.read().unwrap().username.clone());
+                    }
+                }
             });
+        }
+
+        if remove_clients.lock().unwrap().len() > 0 {
+            let mut net_infos = net_infos.write().unwrap();
+            for username in remove_clients.lock().unwrap().iter() {
+                let index = net_infos.iter().position(|x| x.read().unwrap().username == *username);
+                if let Some(index) = index {
+                    net_infos.remove(index);
+                }
+            }
         }
     }
 }

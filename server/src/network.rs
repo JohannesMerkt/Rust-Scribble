@@ -70,17 +70,12 @@ pub fn tcp_server(game_state: Mutex<GameState>, port: u16) {
                     secret_key,
                 });
 
+                let arc_net_info = Arc::new(net_info);
                 let thread_gs = Arc::clone(&global_gs);
                 let thread_lobby = Arc::clone(&global_lobby);
-                let arc_net_info = Arc::new(net_info);
                 let thread_net_info = Arc::clone(&arc_net_info);
                 let thread_tx = tx.clone();
-
-                {
-                    let thread_net_infos = Arc::clone(&arc_net_infos);
-                    let glb_cp_net_info = Arc::clone(&arc_net_info);
-                    thread_net_infos.write().unwrap().push(glb_cp_net_info);
-                }
+                arc_net_infos.write().unwrap().push(arc_net_info);
 
                 thread::spawn(move || {
                     handle_client(thread_net_info, thread_gs, thread_lobby, thread_tx);

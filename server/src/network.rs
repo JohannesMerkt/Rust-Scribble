@@ -9,7 +9,6 @@ use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream, Shutdown};
 use std::sync::{Arc, Mutex, mpsc, RwLock};
 use std::thread;
-use std::thread::sleep;
 use std::time::{Duration, Instant};
 use x25519_dalek::{PublicKey, ReusableSecret};
 use rayon::prelude::*;

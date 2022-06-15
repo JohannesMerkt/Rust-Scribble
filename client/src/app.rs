@@ -48,7 +48,7 @@ impl eframe::App for TemplateApp {
             if let Some(network_info) = net_info.as_mut() {
                 // if let Ok(msg)= read_tcp_message(network_info) {
                 //     handle_message(msg, chat_messages, painting);
-                if let Ok(msg)= read_message(network_info) {
+                if let Ok(msg)= read_messages(network_info, 5) {
                     handle_message(msg, chat_messages, painting);
                 }
             }

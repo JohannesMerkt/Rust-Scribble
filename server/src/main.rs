@@ -15,6 +15,8 @@ struct Args {
 
 
 fn main() {
+
+    //TODO move server function into this file
     let game_state = Mutex::new(gamestate::GameState::new());
     let args = Args::parse();
 

@@ -4,7 +4,6 @@ use generic_array::GenericArray;
 use rand::Rng;
 use rand_core::OsRng;
 use serde_json::json;
-use std::rc::Rc;
 use std::{error};
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream, Shutdown};
@@ -39,6 +38,7 @@ pub struct NetworkInfo {
 /// * `port` - The port to listen on.
 ///
 pub fn tcp_server(game_state: Mutex<GameState>, port: u16) {
+    //TODO move this function into main.rs 
     let loopback = Ipv4Addr::new(0, 0, 0, 0);
     let socket = SocketAddrV4::new(loopback, port);
     let listener = TcpListener::bind(socket).unwrap();

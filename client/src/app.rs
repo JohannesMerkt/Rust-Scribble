@@ -1,6 +1,7 @@
 use egui::{Pos2, Color32};
 use egui::{TextStyle, ScrollArea, Key};
 use serde_json::json;
+use rayon::prelude::*;
 use crate::network::*;
 use crate::Painting;
 use crate::painting;
@@ -159,15 +160,15 @@ impl eframe::App for TemplateApp {
                     chat_messages.push(format!("{}: {}", username, message));
                     println!("{} says: {}", username, message);
                 } else if m["kind"].eq("add_line") {
-                    let posx:Vec<f64> = m["line"]["posx"].as_array().unwrap().iter().map(|pos| pos.as_f64().unwrap()).collect();
-                    let posy:Vec<f64> = m["line"]["posy"].as_array().unwrap().iter().map(|pos| pos.as_f64().unwrap()).collect();
+                    let posx:Vec<f64> = m["line"]["posx"].as_array().unwrap().par_iter().map(|pos| pos.as_f64().unwrap()).collect();
+                    let posy:Vec<f64> = m["line"]["posy"].as_array().unwrap().par_iter().map(|pos| pos.as_f64().unwrap()).collect();
                     let mut pos_line: Vec<Pos2> = Vec::new();
                     for pos in 0..posx.len() {
                         let pos2 = Pos2{x:posx[pos] as f32, y:posy[pos] as f32};
                         pos_line.push(pos2);
                     }
                     let width = m["line"]["width"].as_f64().unwrap();
-                    let color_values: Vec<u8> = m["line"]["color"].as_array().unwrap().iter().map(|col| col.as_u64().unwrap() as u8).collect();
+                    let color_values: Vec<u8> = m["line"]["color"].as_array().unwrap().par_iter().map(|col| col.as_u64().unwrap() as u8).collect();
                     let color = Color32::from_rgb(color_values[0], color_values[1], color_values[2]);
                     let line: painting::Line = painting::Line {
                         position: pos_line,

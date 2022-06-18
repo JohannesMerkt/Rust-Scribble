@@ -109,6 +109,22 @@ pub fn send_message(net_info: &mut NetworkInfo, msg: Value) -> Result<(), Error>
     )
 }
 
+/// Checks if any messages are waiting to be read from the network
+/// 
+/// # Arguments
+/// * `net_info` - The network information
+/// 
+/// # Returns
+/// * `true` - If there are messages waiting to be read.
+/// 
+/// This function should be used in a thread to force updates as soon as a message is waiting to be read.
+/// 
+pub fn message_waiting(net_info: &mut NetworkInfo) -> bool { 
+    let buf = &mut [0; 1];
+    let res = net_info.tcp_stream.peek(buf); 
+    return res.is_ok() && res.unwrap() > 0; 
+}
+
 /// Try and read a message from the server
 /// 
 /// # Arguments

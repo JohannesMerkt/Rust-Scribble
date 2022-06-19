@@ -4,8 +4,11 @@ pub use app::TemplateApp;
 mod painting;
 pub use painting::Painting;
 mod network;
+mod gamestate;
+mod ui;
+mod network_plugin;
 
-fn main() {
+/*fn main() {
     tracing_subscriber::fmt::init();
 
     let native_options = eframe::NativeOptions::default();
@@ -14,4 +17,20 @@ fn main() {
         native_options,
         Box::new(|_| Box::new(TemplateApp::new())),
     );
+}*/
+
+use bevy::prelude::*;
+use bevy_egui::{EguiPlugin};
+
+
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_plugin(EguiPlugin)
+        .add_plugin(gamestate::GameStatePlugin)
+        .add_plugin(network_plugin::NetworkPlugin)
+        // Systems that create Egui widgets should be run during the `CoreStage::Update` stage,
+        // or after the `EguiSystem::BeginFrame` system (which belongs to the `CoreStage::PreUpdate` stage).
+        .add_system(ui::render_ui)
+        .run();
 }

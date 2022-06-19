@@ -248,7 +248,7 @@ fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8
 /// * `game_state` - The current game_state.
 /// * `lobby` - The lobby state.
 /// 
-fn client_disconnected(net_info: &Arc<RwLock<NetworkInfo>>, game_state: &Arc<Mutex<GameState>>, lobby: &Arc<Mutex<LobbyState>>) {
+fn client_disconnected(net_info: &Arc<RwLock<NetworkInfo>>, game_state: &Arc<Mutex<GameState>>, lobby: &Arc<Mutex<LobbyState>>, tx: mpsc::Sender<serde_json::Value>) {
     let net_info = net_info.read().unwrap();
     println!("Client {:?} disconnected", net_info.username);
     let mut game_state = game_state.lock().unwrap();
@@ -256,6 +256,11 @@ fn client_disconnected(net_info: &Arc<RwLock<NetworkInfo>>, game_state: &Arc<Mut
     let mut lobby = lobby.lock().unwrap();
     lobby.remove_player(net_info.username.to_string());
     let _ = net_info.tcp_stream.shutdown(Shutdown::Both);
+    // broadcast all players in lobby when players join
+    let _ = tx.send(json!({
+        "kind": "lobby",
+        "users": lobby.users
+    }));
 }
 
 /// Sends a message to a client.
@@ -371,7 +376,11 @@ fn handle_client(
             let username = net_info.username.clone();
             let mut lobby_state = lobby_state.lock().unwrap();
             lobby_state.add_player(username);
-            let _ = tx.send(json!(&*lobby_state));
+            // broadcast all players in lobby when players join
+            let _ = tx.send(json!({
+                "kind": "lobby",
+                "users": &*lobby_state.users
+            }));
         }
     }  
 
@@ -386,7 +395,7 @@ fn handle_client(
 
         match send_ping_message(&net_info, Instant::now().duration_since(keepalive)) {
             Some(false) => {
-                client_disconnected(&net_info, &game_state, &lobby_state);
+                client_disconnected(&net_info, &game_state, &lobby_state, tx);
                 break;
             },
             Some(true) => keepalive = Instant::now(),

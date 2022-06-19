@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub struct LobbyState {
     //(Username, Ready Status)
-    users: Vec<(String, bool)>,
+    pub users: Vec<(String, bool)>,
     seconds_til_game_start: Option<u32>,
 }
 

@@ -29,11 +29,11 @@ struct Player {
 }
 
 #[derive(Serialize, Deserialize)]
-struct ChatMessage {
+pub struct ChatMessage {
     /// id of player who sent the message
-    player_id: i32,
+    pub player_id: i32,
     /// the message the player has sent
-    message: String,
+    pub message: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -41,13 +41,13 @@ pub struct GameState {
     /// are we in lobby or ingame?
     lobby: bool,
     /// the clients stroke settings for drawing
-    stroke: Stroke,
+    pub stroke: Stroke,
     /// the lines on the canvas
     lines: Vec<Line>,
     /// clients text in the input field of the chat section
-    chat_message_input: String,
+    pub chat_message_input: String,
     /// all messages in chat
-    chat_messages: Vec<ChatMessage>,
+    pub chat_messages: Vec<ChatMessage>,
     /// all players in the lobby
     players: Vec<Player>,
     /// the word that has to be drawn (only populated when drawing)

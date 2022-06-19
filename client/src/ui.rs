@@ -8,7 +8,7 @@ pub fn render_ui(mut egui_context: ResMut<EguiContext>, mut networkstate: ResMut
     if let None = networkstate.info {
         render_connect_view(egui_context, networkstate);
     } else {
-        render_ingame_view(egui_context, networkstate, gamestate);
+        render_ingame_view(egui_context, networkstate, &mut gamestate);
     }
 }
 
@@ -49,14 +49,14 @@ fn render_lobby_view(mut egui_context: ResMut<EguiContext>, mut networkstate: Re
             ui.label("Chat: ");
             ui.text_edit_singleline(&mut gamestate.chat_message_input);
             if ui.button("Send").clicked() || (ui.input().key_pressed(egui::Key::Enter) && !gamestate.chat_message_input.is_empty()) {
-                network_plugin::send_chat_message(networkstate, gamestate);
+                network_plugin::send_chat_message(networkstate, &mut gamestate);
             }
 
         });
     });
 }
 
-fn render_ingame_view(mut egui_context: ResMut<EguiContext>, mut networkstate: ResMut<network_plugin::NetworkState>, mut gamestate: ResMut<gamestate::GameState>) {
+fn render_ingame_view(mut egui_context: ResMut<EguiContext>, mut networkstate: ResMut<network_plugin::NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
     egui::SidePanel::right("side_panel").show(egui_context.ctx_mut(), |ui| {
         ui.heading("Chat");
         let text_style = egui::TextStyle::Body;
@@ -78,7 +78,7 @@ fn render_ingame_view(mut egui_context: ResMut<EguiContext>, mut networkstate: R
         ui.horizontal(|ui| {
             ui.label("Chat: ");
             ui.text_edit_singleline(&mut gamestate.chat_message_input);
-            if ui.button("Send").clicked() || (ui.input().key_pressed(egui::Key::Enter) && !gamestate.chat_message_input.is_empty()) {
+            if ui.button("Send").clicked() || (ui.input().key_pressed(egui::Key::Enter) && !(*gamestate).chat_message_input.is_empty()) {
                 network_plugin::send_chat_message(networkstate, gamestate);
             }
 

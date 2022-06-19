@@ -43,7 +43,7 @@ pub fn connect(mut networkstate: ResMut<NetworkState>) {
     }
 }
 
-pub fn send_chat_message(mut networkstate: ResMut<NetworkState>, mut gamestate: ResMut<gamestate::GameState>) {
+pub fn send_chat_message(mut networkstate: ResMut<NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
     let msg = json!({
         "kind": "chat_message",
         "username": networkstate.name,

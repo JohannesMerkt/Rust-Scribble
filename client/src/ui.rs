@@ -94,7 +94,7 @@ fn render_ingame_view(mut egui_context: ResMut<EguiContext>, mut networkstate: R
             println!("Send Ready");
         }
     });
-    /*egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
+    egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         // The central panel the region left after adding TopPanel's and SidePanel's
         ui.horizontal(|ui| {
             ui.add(egui::Slider::new(&mut gamestate.stroke.width, 1.0..=10.0).text("width"));
@@ -116,5 +116,5 @@ fn render_ingame_view(mut egui_context: ResMut<EguiContext>, mut networkstate: R
             }*/
         }); 
         ui.label("Paint with your mouse/touch!");
-    });*/
+    });
 }

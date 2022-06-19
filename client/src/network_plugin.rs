@@ -31,7 +31,7 @@ impl Default for NetworkState {
 
 struct CheckNetworkTimer(Timer);
 
-pub fn connect(mut networkstate: ResMut<NetworkState>) {
+pub fn connect(networkstate: &mut ResMut<NetworkState>) {
     let res = network::connect_to_server(networkstate.address.as_str(), networkstate.port, networkstate.name.as_str());
     match res {
         Ok(info) => {
@@ -43,7 +43,7 @@ pub fn connect(mut networkstate: ResMut<NetworkState>) {
     }
 }
 
-pub fn send_chat_message(mut networkstate: ResMut<NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
+pub fn send_chat_message(networkstate: &mut ResMut<NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
     let msg = json!({
         "kind": "chat_message",
         "username": networkstate.name,
@@ -71,9 +71,7 @@ fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut net
                     println!("{}", m["kind"]);
 
                     if m["kind"].eq("chat_message") {
-                        println!("Here");
                         let message = m["message"].as_str().unwrap();
-                        println!("Here 2");
                         let chat_message = gamestate::ChatMessage {
                             message: message.to_string(),
                             player_id: 0 // TODO send the player id

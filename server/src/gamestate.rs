@@ -156,13 +156,15 @@ impl GameState {
         self.in_game = true;
         self.word = "Tree".to_string(); // TODO get random word
         self.time = 500;
-        let mut drawer = rand::thread_rng().gen_range(0, self.players.len() - 1);
+        let mut drawer_id = rand::thread_rng().gen_range(0, self.players.len() - 1);
         for player in &mut self.players.iter_mut() {
             player.drawing = false;
-            if drawer == 0 {
+            if drawer_id == 0 {
                 player.drawing = true;
             }
-            drawer -= 1;
+            if drawer_id > 0 {
+                drawer_id -= 1;
+            }
             player.guessed_word = false;
             player.playing = true;
             player.ready = false;

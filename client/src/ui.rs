@@ -37,6 +37,11 @@ fn render_lobby_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut 
         ui.heading("Connected!");
         render_chat_area(ui, networkstate, gamestate);
 
+        ui.heading("Players");
+        for player in &gamestate.players {
+            ui.label(format!("{} - ready: {}",player.name, player.ready));
+        }
+
         // render a button for ready or unready
         if let Some(net_info) = networkstate.info.as_mut() {
             let player_result = gamestate.players.iter().find(|player| player.id == net_info.id);

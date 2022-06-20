@@ -6,17 +6,17 @@ use crate::gamestate;
 /// this system handles rendering the ui
 pub fn render_ui(mut egui_context: ResMut<EguiContext>, mut networkstate: ResMut<network_plugin::NetworkState>, mut gamestate: ResMut<gamestate::GameState>) {
     if let None = networkstate.info {
-        render_connect_view(egui_context, &mut networkstate);
+        render_connect_view(&mut egui_context, &mut networkstate);
     } else {
         if gamestate.in_game {
-            render_ingame_view(egui_context, &mut networkstate, &mut gamestate);
+            render_ingame_view(&mut egui_context, &mut networkstate, &mut gamestate);
         } else {
-            render_lobby_view(egui_context, &mut networkstate, &mut gamestate);
+            render_lobby_view(&mut egui_context, &mut networkstate, &mut gamestate);
         }
     }
 }
 
-fn render_connect_view(mut egui_context: ResMut<EguiContext>, networkstate: &mut ResMut<network_plugin::NetworkState>) {
+fn render_connect_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut ResMut<network_plugin::NetworkState>) {
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         ui.heading("Rust Scribble:");
         ui.label("Name");
@@ -32,77 +32,24 @@ fn render_connect_view(mut egui_context: ResMut<EguiContext>, networkstate: &mut
     });
 }
 
-fn render_lobby_view(mut egui_context: ResMut<EguiContext>, networkstate: &mut ResMut<network_plugin::NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
+fn render_lobby_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut ResMut<network_plugin::NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         ui.heading("Connected!");
-        ui.heading("Chat");
-        let text_style = egui::TextStyle::Body;
-        let row_height = ui.text_style_height(&text_style);
-        egui::ScrollArea::vertical().auto_shrink([false; 2]).stick_to_bottom().max_height(200.0).show_rows(
-            ui,
-            row_height,
-            100,
-            |ui, _| {
-                for chat_message in gamestate.chat_messages.iter() {
-                    let searchPlayerResult = gamestate.players.iter().find(|player| player.id == chat_message.player_id);
-                    if let None = searchPlayerResult {
-
-                    } else {
-                        let player = searchPlayerResult.unwrap();
-                        ui.label(format!("{}: {}",player.name, chat_message.message));
-                        ui.set_min_width(100.0);
-                    }
-
-                }
-            },
-        );
-        ui.horizontal(|ui| {
-            ui.label("Chat: ");
-            ui.text_edit_singleline(&mut gamestate.chat_message_input);
-            if ui.button("Send").clicked() || (ui.input().key_pressed(egui::Key::Enter) && !gamestate.chat_message_input.is_empty()) {
-                network_plugin::send_chat_message(networkstate, gamestate);
-            }
-
-        });
-    });
-}
-
-fn render_ingame_view(mut egui_context: ResMut<EguiContext>, networkstate: &mut ResMut<network_plugin::NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
-    egui::SidePanel::right("side_panel").show(egui_context.ctx_mut(), |ui| {
-        ui.heading("Chat");
-        let text_style = egui::TextStyle::Body;
-        let row_height = ui.text_style_height(&text_style);
-        //set min_width
-
-        egui::ScrollArea::vertical().auto_shrink([false; 2]).stick_to_bottom().max_height(200.0).show_rows(
-            ui,
-            row_height,
-            100,
-            |ui, _| {
-                for chat_message in gamestate.chat_messages.iter() {
-                    ui.label(chat_message.message.clone());
-                    ui.set_min_width(100.0);
-                }
-            },
-        );
-
-        ui.horizontal(|ui| {
-            ui.label("Chat: ");
-            ui.text_edit_singleline(&mut gamestate.chat_message_input);
-            if ui.button("Send").clicked() || (ui.input().key_pressed(egui::Key::Enter) && !(*gamestate).chat_message_input.is_empty()) {
-                network_plugin::send_chat_message(networkstate, gamestate);
-            }
-
-        });
-
-        if ui.button("Disconnect").clicked() {
-            println!("Disconnect from server");
-        }
-
+        render_chat_area(ui, networkstate, gamestate);
 
         //A button that will send a ready message to the server
         if ui.button("Ready").clicked() {
             println!("Send Ready");
+        }
+    });
+}
+
+fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut ResMut<network_plugin::NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
+    egui::SidePanel::right("side_panel").show(egui_context.ctx_mut(), |ui| {
+        render_chat_area(ui, networkstate, gamestate);
+
+        if ui.button("Disconnect").clicked() {
+            println!("Disconnect from server");
         }
     });
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
@@ -127,5 +74,37 @@ fn render_ingame_view(mut egui_context: ResMut<EguiContext>, networkstate: &mut 
             }*/
         }); 
         ui.label("Paint with your mouse/touch!");
+    });
+}
+
+fn render_chat_area(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin::NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
+    ui.heading("Chat");
+    let text_style = egui::TextStyle::Body;
+    let row_height = ui.text_style_height(&text_style);
+    egui::ScrollArea::vertical().auto_shrink([false; 2]).stick_to_bottom().max_height(200.0).show_rows(
+        ui,
+        row_height,
+        100,
+        |ui, _| {
+            for chat_message in gamestate.chat_messages.iter() {
+                let search_player_result = gamestate.players.iter().find(|player| player.id == chat_message.player_id);
+                if let None = search_player_result {
+
+                } else {
+                    let player = search_player_result.unwrap();
+                    ui.label(format!("{}: {}",player.name, chat_message.message));
+                    ui.set_min_width(100.0);
+                }
+
+            }
+        },
+    );
+    ui.horizontal(|ui| {
+        ui.label("Chat: ");
+        ui.text_edit_singleline(&mut gamestate.chat_message_input);
+        if ui.button("Send").clicked() || (ui.input().key_pressed(egui::Key::Enter) && !gamestate.chat_message_input.is_empty()) {
+            network_plugin::send_chat_message(networkstate, gamestate);
+        }
+
     });
 }

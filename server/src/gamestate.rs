@@ -2,29 +2,6 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct Pos2 {
-    /// How far to the right.
-    pub x: f32,
-    /// How far down.
-    pub y: f32,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Color {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-    pub a: u8
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Line {
-    pub positions: Vec<Pos2>,
-    pub width: f32,
-    pub color: Color
-}
-
-#[derive(Serialize, Deserialize)]
 pub struct Player {
     /// player id
     pub id: i64, // TODO use smaller number? u8 ?
@@ -54,10 +31,6 @@ pub struct ChatMessage {
 pub struct GameState {
     /// are we in lobby or ingame?
     pub in_game: bool,
-    /// the lines on the canvas
-    pub lines: Vec<Line>,
-    /// all messages in chat
-    pub chat_messages: Vec<ChatMessage>,
     /// all players in the lobby
     pub players: Vec<Player>,
     /// the word that has to be drawn (only visible to drawer)
@@ -70,8 +43,6 @@ impl GameState {
     pub fn new() -> GameState {
         GameState {
             in_game: false,
-            lines: Vec::new(),
-            chat_messages: Vec::new(),
             players: Vec::new(),
             word: "".to_string(),
             time: 0
@@ -138,18 +109,8 @@ impl GameState {
                 self.end_game();
             }
             return all_guessed;
-        } else {
-            self.chat_messages.push(ChatMessage { player_id: player_id, message: message.clone() })
         }
         return false;
-    }
-
-    pub fn add_line(&mut self, positions: Vec<Pos2>, width: f32, color: Color) {
-        self.lines.push(Line {
-            positions: positions,
-            width: width,
-            color: color
-        });
     }
 
     fn start_game(&mut self) {
@@ -176,7 +137,6 @@ impl GameState {
         self.in_game = false;
         self.word = "".to_string();
         self.time = 0;
-        self.lines = Vec::new();
         for player in &mut self.players.iter_mut() {
             player.guessed_word = false;
             player.playing = false;

@@ -50,7 +50,7 @@ impl GameState {
     }
 
     pub fn add_player(&mut self, id: i64, name: String) {
-        self.players.push(Player { id: id, name: name.clone(), score: 0, ready: false, drawing: false, playing: false, guessed_word: false});
+        self.players.push(Player { id, name, score: 0, ready: false, drawing: false, playing: false, guessed_word: false});
     }
 
     pub fn remove_player(&mut self, player_id: i64) {
@@ -87,7 +87,7 @@ impl GameState {
             }
             return all_ready
         }
-        return false
+        false
     }
 
     pub fn chat_or_guess(&mut self, player_id: i64, message: &String) -> bool {
@@ -110,7 +110,7 @@ impl GameState {
             }
             return all_guessed;
         }
-        return false;
+        false
     }
 
     fn start_game(&mut self) {

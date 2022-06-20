@@ -101,7 +101,7 @@ fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut net
                         let player_id = m["player_id"].as_i64().unwrap();
                         let chat_message = gamestate::ChatMessage {
                             message: message.to_string(),
-                            player_id: player_id
+                            player_id
                         };
                         gamestate.chat_messages.push(chat_message);
                     } else if m["kind"].eq("update") { 

@@ -81,7 +81,7 @@ pub fn tcp_server(game_state: Mutex<GameState>, port: u16) {
                             handle_client(thread_net_info, thread_gs, thread_tx);
                         });
                     }
-                    Err(e) => println!("Error sending id")
+                    Err(_e) => println!("Error sending id")
                 }
             }
             Err(e) => println!("Error sending public key to {}: {}", addr, e),
@@ -118,8 +118,6 @@ fn handle_message(
     println!("RCV: {:?}", msg);
 
     if msg["kind"].eq("chat_message") {
-        let mut game_state = game_state.lock().unwrap();
-        // let result = game_state.chat_or_guess(msg["player_id"].as_i64().unwrap(), msg["ready"].as_bool().unwrap());
         let  _ = tx.send(json!({
             "kind": "chat_message",
             "player_id": player_id,

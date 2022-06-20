@@ -122,7 +122,7 @@ pub fn send_message(net_info: &mut NetworkInfo, msg: Value) -> Result<(), Error>
 pub fn message_waiting(net_info: &mut NetworkInfo) -> bool { 
     let buf = &mut [0; 1];
     let res = net_info.tcp_stream.peek(buf); 
-    return res.is_ok() && res.unwrap() > 0; 
+    res.is_ok() && res.unwrap() > 0
 }
 
 /// Try and read a message from the server
@@ -255,7 +255,7 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
         let key: chacha20poly1305::Key = *Key::from_slice(shared_secret.as_bytes());
         
         Ok(NetworkInfo {
-            id: id,
+            id,
             tcp_stream,
             key,
         })

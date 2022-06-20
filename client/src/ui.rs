@@ -5,14 +5,12 @@ use crate::gamestate;
 
 /// this system handles rendering the ui
 pub fn render_ui(mut egui_context: ResMut<EguiContext>, mut networkstate: ResMut<network_plugin::NetworkState>, mut gamestate: ResMut<gamestate::GameState>) {
-    if let None = networkstate.info {
+    if networkstate.info.is_none() {
         render_connect_view(&mut egui_context, &mut networkstate);
+    } else if gamestate.in_game {
+        render_ingame_view(&mut egui_context, &mut networkstate, &mut gamestate);
     } else {
-        if gamestate.in_game {
-            render_ingame_view(&mut egui_context, &mut networkstate, &mut gamestate);
-        } else {
-            render_lobby_view(&mut egui_context, &mut networkstate, &mut gamestate);
-        }
+        render_lobby_view(&mut egui_context, &mut networkstate, &mut gamestate);
     }
 }
 
@@ -36,7 +34,7 @@ fn render_lobby_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut 
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         ui.heading("Connected!");
         render_chat_area(ui, networkstate, gamestate);
-        render_player_list(ui, networkstate, gamestate);
+        render_player_list(ui, gamestate);
 
         // render a button for ready or unready
         if let Some(net_info) = networkstate.info.as_mut() {
@@ -59,7 +57,7 @@ fn render_lobby_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut 
 fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut ResMut<network_plugin::NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
     egui::SidePanel::right("side_panel").show(egui_context.ctx_mut(), |ui| {
         render_chat_area(ui, networkstate, gamestate);
-        render_player_list(ui, networkstate, gamestate);
+        render_player_list(ui, gamestate);
 
         if ui.button("Disconnect").clicked() {
             println!("Disconnect from server");
@@ -80,7 +78,7 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
             let (_id, stroke_rect) = ui.allocate_space(ui.spacing().interact_size);
             let left = stroke_rect.left_center();
             let right = stroke_rect.right_center();
-            ui.painter().line_segment([left, right], gamestate.stroke.clone());
+            ui.painter().line_segment([left, right], gamestate.stroke);
             ui.separator();
             /*if ui.button("Clear Painting").clicked() {
                 self.all_lines.clear();
@@ -95,7 +93,7 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
 
             if gamestate.lines.is_empty() {
                 let width = gamestate.stroke.width;
-                let color = gamestate.stroke.color.clone();
+                let color = gamestate.stroke.color;
                 gamestate.lines.push(gamestate::Line {
                     positions: Vec::new(),
                     stroke: egui::Stroke::new(width, color)
@@ -109,7 +107,7 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
                 if current_line.positions.last() != Some(&canvas_pos) {
                     current_line.positions.push(canvas_pos);
                     //let width = &gamestate.stroke.width;
-                    //let color = gamestate.stroke.color.clone();
+                    //let color = gamestate.stroke.color;
                     //let stroke = egui::Stroke::new(width, color);
                     //current_line.stroke = stroke;
                     response.mark_changed();
@@ -117,7 +115,7 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
             } else if !current_line.positions.is_empty() {
                 network_plugin::send_line(current_line, networkstate);
                 let width = gamestate.stroke.width;
-                let color = gamestate.stroke.color.clone();
+                let color = gamestate.stroke.color;
                 let new_line = gamestate::Line { positions: vec![], stroke: egui::Stroke::new(width, color)};
                 gamestate.lines.push(new_line);
                 response.mark_changed();
@@ -148,10 +146,7 @@ fn render_chat_area(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin:
         |ui, _| {
             for chat_message in gamestate.chat_messages.iter() {
                 let search_player_result = gamestate.players.iter().find(|player| player.id == chat_message.player_id);
-                if let None = search_player_result {
-
-                } else {
-                    let player = search_player_result.unwrap();
+                if let Some(player) = search_player_result {
                     ui.label(format!("{}: {}",player.name, chat_message.message));
                     ui.set_min_width(100.0);
                 }
@@ -169,7 +164,7 @@ fn render_chat_area(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin:
     });
 }
 
-fn render_player_list(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin::NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
+fn render_player_list(ui: &mut egui::Ui, gamestate: &mut ResMut<gamestate::GameState>) {
     ui.heading("Players");
     for player in &gamestate.players {
         ui.label(format!("{} - ready: {} - playing: {} - drawing: {} - guessed word: {}",player.name, player.ready, player.playing, player.drawing, player.guessed_word));

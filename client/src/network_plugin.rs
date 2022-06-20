@@ -63,9 +63,28 @@ pub fn send_ready(networkstate: &mut ResMut<NetworkState>, gamestate: &mut ResMu
     }
 }
 
+pub fn send_line(line: &mut gamestate::Line, networkstate: &mut ResMut<NetworkState>) {
+    let x_positions: Vec<f32> = line.positions.iter().map(|pos2| pos2.x).collect();
+    let y_positions: Vec<f32> = line.positions.iter().map(|pos2| pos2.y).collect();
+    let width = line.stroke.width;
+    let color = line.stroke.color;
+    let msg = json!({
+        "kind": "add_line",
+        "line": {
+            "x_positions": x_positions,
+            "y_positions": y_positions,
+            "width": width,
+            "color": color,
+        }
+    });
+    if let Some(network_info) = networkstate.info.as_mut() {
+        let _ = network::send_message(network_info, msg);
+    }
+}
+
 fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut networkstate: ResMut<NetworkState>, mut gamestate: ResMut<gamestate::GameState>) {
     if timer.0.tick(time.delta()).just_finished() {
-        println!("{}: Check for messages", time.seconds_since_startup());
+        // println!("{}: Check for messages", time.seconds_since_startup());
         //Read a message from the network
         if let Some(network_info) = networkstate.info.as_mut() {
             if network::message_waiting(network_info) {
@@ -105,6 +124,23 @@ fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut net
                         gamestate.time = time;
                         gamestate.players = players;
                         println!("gamestate {}", gamestate.players.len());
+                    } else if m["kind"].eq("add_line") {
+                        let x_positions:Vec<f64> = m["line"]["x_positions"].as_array().unwrap().iter().map(|pos| pos.as_f64().unwrap()).collect();
+                        let y_positions:Vec<f64> = m["line"]["y_positions"].as_array().unwrap().iter().map(|pos| pos.as_f64().unwrap()).collect();
+                        let mut pos_line: Vec<egui::Pos2> = Vec::new();
+                        for pos in 0..x_positions.len() {
+                            let pos2 = egui::Pos2{x:x_positions[pos] as f32, y:y_positions[pos] as f32};
+                            pos_line.push(pos2);
+                        }
+                        let width = m["line"]["width"].as_f64().unwrap();
+                        let color_values: Vec<u8> = m["line"]["color"].as_array().unwrap().iter().map(|col| col.as_u64().unwrap() as u8).collect();
+                        let color = egui::Color32::from_rgb(color_values[0], color_values[1], color_values[2]);
+                        let line: gamestate::Line = gamestate::Line {
+                            positions: pos_line,
+                            stroke: egui::Stroke::new(width as f32, color),
+                        };
+                        let length = gamestate.lines.len();
+                        gamestate.lines.insert(length - 1, line);
                     }
                     /*else if m["kind"].eq("lobby") {
                         let userValues = m["users"].as_array().unwrap();

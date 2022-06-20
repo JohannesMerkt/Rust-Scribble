@@ -61,7 +61,7 @@ impl Default for GameState {
     fn default() -> Self {
         GameState { 
             in_game: false, 
-            stroke: Stroke::new(10.,Color32::BLACK), 
+            stroke: Stroke::new(10.,Color32::RED), 
             lines: Vec::new(), 
             chat_message_input: String::new(), 
             chat_messages: Vec::new(), 

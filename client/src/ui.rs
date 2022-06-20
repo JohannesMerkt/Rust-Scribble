@@ -80,13 +80,60 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
             let (_id, stroke_rect) = ui.allocate_space(ui.spacing().interact_size);
             let left = stroke_rect.left_center();
             let right = stroke_rect.right_center();
-            ui.painter().line_segment([left, right], gamestate.stroke);
+            ui.painter().line_segment([left, right], gamestate.stroke.clone());
             ui.separator();
             /*if ui.button("Clear Painting").clicked() {
                 self.all_lines.clear();
             }*/
         }); 
         ui.label("Paint with your mouse/touch!");
+        egui::Frame::canvas(ui.style()).show(ui, |ui| {
+            let (mut response, painter) = ui.allocate_painter(ui.available_size_before_wrap(), egui::Sense::drag());
+
+            let to_screen = egui::emath::RectTransform::from_to(egui::Rect::from_min_size(egui::Pos2::ZERO, response.rect.square_proportions()), response.rect);
+            let from_screen = to_screen.inverse();
+
+            if gamestate.lines.is_empty() {
+                let width = gamestate.stroke.width;
+                let color = gamestate.stroke.color.clone();
+                gamestate.lines.push(gamestate::Line {
+                    positions: Vec::new(),
+                    stroke: egui::Stroke::new(width, color)
+                });
+            }
+
+            let current_line = gamestate.lines.last_mut().unwrap();
+
+            if let Some(pointer_pos) = response.interact_pointer_pos() {
+                let canvas_pos = from_screen * pointer_pos;
+                if current_line.positions.last() != Some(&canvas_pos) {
+                    current_line.positions.push(canvas_pos);
+                    //let width = &gamestate.stroke.width;
+                    //let color = gamestate.stroke.color.clone();
+                    //let stroke = egui::Stroke::new(width, color);
+                    //current_line.stroke = stroke;
+                    response.mark_changed();
+                }
+            } else if !current_line.positions.is_empty() {
+                network_plugin::send_line(current_line, networkstate);
+                let width = gamestate.stroke.width;
+                let color = gamestate.stroke.color.clone();
+                let new_line = gamestate::Line { positions: vec![], stroke: egui::Stroke::new(width, color)};
+                gamestate.lines.push(new_line);
+                response.mark_changed();
+            }
+
+            let mut shapes = vec![];
+            for line in &gamestate.lines {
+                if line.positions.len() >= 2 {
+                    let points: Vec<egui::Pos2> = line.positions.iter().map(|p| to_screen * *p).collect();
+                    shapes.push(egui::Shape::line(points, line.stroke));
+                }
+            }
+            painter.extend(shapes);
+
+            response
+        });
     });
 }
 

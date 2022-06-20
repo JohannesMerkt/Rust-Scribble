@@ -5,33 +5,33 @@ use serde::{Deserialize, Serialize};
 use bevy::prelude::*;
 
 #[derive(Serialize, Deserialize)]
-struct Line {
-    positions: Vec<Pos2>,
-    stroke: Stroke
+pub struct Line {
+    pub positions: Vec<Pos2>,
+    pub stroke: Stroke
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Player {
     /// player id
-    id: i64,
+    pub id: i64, // TODO use smaller number? u8 ?
     /// name of the player
-    name: String,
+    pub name: String,
     /// the score of the player
-    score: i32,
+    pub score: i64, // TODO use smaller number? i32
     /// is the player in lobby ready to play
-    ready: bool,
+    pub ready: bool,
     /// is the player drawing or guessing?
-    drawing: bool,
+    pub drawing: bool,
     /// is player playing or spectating?
-    playing: bool,
+    pub playing: bool,
     /// has player guessed the word?
-    guessed_word: bool,
+    pub guessed_word: bool,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ChatMessage {
     /// id of player who sent the message
-    pub player_id: i32,
+    pub player_id: i64, // TODO use smaller number? u8 ?
     /// the message the player has sent
     pub message: String,
 }
@@ -43,7 +43,7 @@ pub struct GameState {
     /// the clients stroke settings for drawing
     pub stroke: Stroke,
     /// the lines on the canvas
-    lines: Vec<Line>,
+    pub lines: Vec<Line>,
     /// clients text in the input field of the chat section
     pub chat_message_input: String,
     /// all messages in chat
@@ -51,9 +51,9 @@ pub struct GameState {
     /// all players in the lobby
     pub players: Vec<Player>,
     /// the word that has to be drawn (only populated when drawing)
-    word: String,
+    pub word: String,
     /// remaining time for round in seconds
-    time: i32,
+    pub time: i64, // TODO use smaller number? i32
 }
 
 impl Default for GameState {

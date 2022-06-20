@@ -77,7 +77,27 @@ fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut net
                             player_id: 0 // TODO send the player id
                         };
                         gamestate.chat_messages.push(chat_message);
-                    } /*else if m["kind"].eq("lobby") {
+                    } else if m["kind"].eq("update") { 
+                        let in_game = m["in_game"].as_bool().unwrap();
+                        let raw_players = m["players"].as_array().unwrap();
+                        let mut players: Vec<gamestate::Player> = Vec::new();
+                        for raw_player in raw_players {
+                            players.push(gamestate::Player {
+                                id: raw_player["id"].as_i64().unwrap(),
+                                name: raw_player["name"].as_str().unwrap().to_string(),
+                                score: raw_player["score"].as_i64().unwrap(),
+                                ready: raw_player["ready"].as_bool().unwrap(),
+                                drawing: raw_player["drawing"].as_bool().unwrap(),
+                                playing: raw_player["playing"].as_bool().unwrap(),
+                                guessed_word: raw_player["guessed_word"].as_bool().unwrap()
+                            });
+                        }
+                        let time = m["time"].as_i64().unwrap();
+                        gamestate.in_game = in_game;
+                        gamestate.time = time;
+                        gamestate.players = players;
+                    }
+                    /*else if m["kind"].eq("lobby") {
                         let userValues = m["users"].as_array().unwrap();
                         let users = 
                         for userValue in userValues {

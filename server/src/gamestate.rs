@@ -27,11 +27,11 @@ pub struct Line {
 #[derive(Serialize, Deserialize)]
 pub struct Player {
     /// player id
-    pub id: i64,
+    pub id: i64, // TODO use smaller number? u8 ?
     /// name of the player
     pub name: String,
     /// the score of the player
-    pub score: i32,
+    pub score: i64, // TODO use smaller number? i32
     /// is the player in lobby ready to play
     pub ready: bool,
     /// is the player drawing or guessing?
@@ -45,7 +45,7 @@ pub struct Player {
 #[derive(Serialize, Deserialize)]
 pub struct ChatMessage {
     /// id of player who sent the message
-    pub player_id: i64,
+    pub player_id: i64, // TODO use smaller number? u8 ?
     /// the message the player has sent
     pub message: String,
 }
@@ -63,7 +63,7 @@ pub struct GameState {
     /// the word that has to be drawn (only visible to drawer)
     pub word: String,
     /// remaining time for round in seconds
-    pub time: i32,
+    pub time: i64, // TODO use smaller number? i32
 }
 
 impl GameState {

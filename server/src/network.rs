@@ -112,6 +112,7 @@ fn generate_keypair() -> (PublicKey, ReusableSecret) {
 fn handle_message(
     msg: serde_json::Value,
     game_state: &Arc<Mutex<GameState>>,
+    player_id: i64,
     tx: &mpsc::Sender<serde_json::Value>,
 ) {
     println!("RCV: {:?}", msg);
@@ -119,7 +120,11 @@ fn handle_message(
     if msg["kind"].eq("chat_message") {
         let mut game_state = game_state.lock().unwrap();
         // let result = game_state.chat_or_guess(msg["player_id"].as_i64().unwrap(), msg["ready"].as_bool().unwrap());
-        let  _ = tx.send(msg);
+        let  _ = tx.send(json!({
+            "kind": "chat_message",
+            "player_id": player_id,
+            "message": msg["message"].to_string()
+        }));
     } else if msg["kind"].eq("ready") {
         let mut game_state = game_state.lock().unwrap();
         let result = game_state.set_ready(msg["player_id"].as_i64().unwrap(), msg["ready"].as_bool().unwrap());
@@ -371,7 +376,7 @@ fn handle_client(
     game_state: Arc<Mutex<GameState>>,
     tx: mpsc::Sender<serde_json::Value>,
 ) {
-
+    let mut player_id = 0;
     {
         let mut net_info = net_info.write().unwrap();
         let _ = net_info
@@ -387,11 +392,11 @@ fn handle_client(
         let _ = conn.read_line(&mut username);
 
         let username = username.trim().to_string();
+        player_id = net_info.id;
 
         let client_public: PublicKey = PublicKey::from(buffer);
         let shared_secret = net_info.secret_key.diffie_hellman(&client_public);
         net_info.key = *Key::from_slice(shared_secret.as_bytes());
-
         {
             let mut game_state = game_state.lock().unwrap();
             game_state.add_player(net_info.id, username);
@@ -410,7 +415,7 @@ fn handle_client(
     //Start of the main loop to read messages and send keepalive pings
     loop {
         if let Ok(msg) = read_tcp_message(&net_info) {
-            handle_message(msg, &game_state, &tx);
+            handle_message(msg, &game_state, player_id, &tx);
             keepalive = Instant::now();
         }
 

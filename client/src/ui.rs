@@ -8,7 +8,11 @@ pub fn render_ui(mut egui_context: ResMut<EguiContext>, mut networkstate: ResMut
     if let None = networkstate.info {
         render_connect_view(egui_context, &mut networkstate);
     } else {
-        render_ingame_view(egui_context, &mut networkstate, &mut gamestate);
+        if gamestate.in_game {
+            render_ingame_view(egui_context, &mut networkstate, &mut gamestate);
+        } else {
+            render_lobby_view(egui_context, &mut networkstate, &mut gamestate);
+        }
     }
 }
 
@@ -40,8 +44,15 @@ fn render_lobby_view(mut egui_context: ResMut<EguiContext>, networkstate: &mut R
             100,
             |ui, _| {
                 for chat_message in gamestate.chat_messages.iter() {
-                    ui.label(chat_message.message.clone());
-                    ui.set_min_width(100.0);
+                    let searchPlayerResult = gamestate.players.iter().find(|player| player.id == chat_message.player_id);
+                    if let None = searchPlayerResult {
+
+                    } else {
+                        let player = searchPlayerResult.unwrap();
+                        ui.label(format!("{}: {}",player.name, chat_message.message));
+                        ui.set_min_width(100.0);
+                    }
+
                 }
             },
         );

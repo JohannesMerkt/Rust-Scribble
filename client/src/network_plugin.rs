@@ -4,8 +4,6 @@ use crate::gamestate;
 use serde_json::json;
 
 pub struct NetworkState {
-    /// player id that has been given by the server matching with player id in player list
-    pub id: Option<i32>,
     /// client player name
     pub name: String,
     /// client input for server address to connect to 
@@ -19,7 +17,6 @@ pub struct NetworkState {
 impl Default for NetworkState {
     fn default() -> Self {
         NetworkState {
-            id: None,
             name: "Player".to_string(),
             address: "127.0.0.1".to_string(),
             port: 3000,
@@ -46,7 +43,6 @@ pub fn connect(networkstate: &mut ResMut<NetworkState>) {
 pub fn send_chat_message(networkstate: &mut ResMut<NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
     let msg = json!({
         "kind": "chat_message",
-        "username": networkstate.name,
         "message": gamestate.chat_message_input,
     });
     
@@ -72,9 +68,10 @@ fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut net
 
                     if m["kind"].eq("chat_message") {
                         let message = m["message"].as_str().unwrap();
+                        let player_id = m["player_id"].as_i64().unwrap();
                         let chat_message = gamestate::ChatMessage {
                             message: message.to_string(),
-                            player_id: 0 // TODO send the player id
+                            player_id: player_id
                         };
                         gamestate.chat_messages.push(chat_message);
                     } else if m["kind"].eq("update") { 
@@ -96,6 +93,7 @@ fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut net
                         gamestate.in_game = in_game;
                         gamestate.time = time;
                         gamestate.players = players;
+                        println!("gamestate {}", gamestate.players.len());
                     }
                     /*else if m["kind"].eq("lobby") {
                         let userValues = m["users"].as_array().unwrap();

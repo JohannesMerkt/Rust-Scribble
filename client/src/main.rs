@@ -1,8 +1,4 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
-mod app;
-pub use app::TemplateApp;
-mod painting;
-pub use painting::Painting;
 mod network;
 mod gamestate;
 mod ui;

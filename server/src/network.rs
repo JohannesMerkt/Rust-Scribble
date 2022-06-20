@@ -255,7 +255,6 @@ fn client_disconnected(net_info: &Arc<RwLock<NetworkInfo>>, game_state: &Arc<Mut
     game_state.remove_player(net_info.username.to_string());
     let mut lobby = lobby.lock().unwrap();
     lobby.remove_player(net_info.username.to_string());
-    let _ = net_info.tcp_stream.shutdown(Shutdown::Both);
 }
 
 /// Sends a message to a client.

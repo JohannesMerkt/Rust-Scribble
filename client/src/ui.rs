@@ -36,11 +36,7 @@ fn render_lobby_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut 
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         ui.heading("Connected!");
         render_chat_area(ui, networkstate, gamestate);
-
-        ui.heading("Players");
-        for player in &gamestate.players {
-            ui.label(format!("{} - ready: {}",player.name, player.ready));
-        }
+        render_player_list(ui, networkstate, gamestate);
 
         // render a button for ready or unready
         if let Some(net_info) = networkstate.info.as_mut() {
@@ -63,6 +59,7 @@ fn render_lobby_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut 
 fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut ResMut<network_plugin::NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
     egui::SidePanel::right("side_panel").show(egui_context.ctx_mut(), |ui| {
         render_chat_area(ui, networkstate, gamestate);
+        render_player_list(ui, networkstate, gamestate);
 
         if ui.button("Disconnect").clicked() {
             println!("Disconnect from server");
@@ -123,4 +120,11 @@ fn render_chat_area(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin:
         }
 
     });
+}
+
+fn render_player_list(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin::NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
+    ui.heading("Players");
+    for player in &gamestate.players {
+        ui.label(format!("{} - ready: {} - playing: {} - drawing: {} - guessed word: {}",player.name, player.ready, player.playing, player.drawing, player.guessed_word));
+    }
 }

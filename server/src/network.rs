@@ -127,7 +127,7 @@ fn handle_message(
         }));
     } else if msg["kind"].eq("ready") {
         let mut game_state = game_state.lock().unwrap();
-        let result = game_state.set_ready(msg["player_id"].as_i64().unwrap(), msg["ready"].as_bool().unwrap());
+        let result = game_state.set_ready(player_id, msg["ready"].as_bool().unwrap());
         if result {
             let _ = tx.send(json!({
                 "kind": "start",

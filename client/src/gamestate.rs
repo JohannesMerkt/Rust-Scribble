@@ -3,6 +3,7 @@ use egui::Pos2;
 use egui::Color32;
 use serde::{Deserialize, Serialize};
 use bevy::prelude::*;
+use crate::network_plugin;
 
 #[derive(Serialize, Deserialize)]
 pub struct Line {

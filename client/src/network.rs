@@ -15,7 +15,7 @@ use x25519_dalek::{EphemeralSecret, PublicKey};
 /// Contains all the information about a client connection.
 pub struct NetworkInfo {
     /// The id of the client.
-    id: i64,
+    pub id: i64,
     /// The tcp_stream of the client.
     tcp_stream: TcpStream,
     /// The shared secret of the client and server.

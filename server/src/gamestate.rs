@@ -103,8 +103,8 @@ impl GameState {
                 player.ready = status;
             }
         }
-        // check if all are ready to start
-        if !self.in_game {
+        // check if all are ready to start and enough players
+        if !self.in_game && self.players.len() > 1 {
             let mut all_ready = true;
             for player in &mut self.players.iter() {
                 if !player.ready {

@@ -37,9 +37,20 @@ fn render_lobby_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut 
         ui.heading("Connected!");
         render_chat_area(ui, networkstate, gamestate);
 
-        //A button that will send a ready message to the server
-        if ui.button("Ready").clicked() {
-            println!("Send Ready");
+        // render a button for ready or unready
+        if let Some(net_info) = networkstate.info.as_mut() {
+            let player_result = gamestate.players.iter().find(|player| player.id == net_info.id);
+            if let Some(player) = player_result {
+                if player.ready {
+                    if ui.button("Not Ready").clicked() {
+                        network_plugin::send_ready(networkstate, gamestate);
+                    }
+                } else {
+                    if ui.button("Ready").clicked() {
+                        network_plugin::send_ready(networkstate, gamestate);
+                    }
+                }
+            }
         }
     });
 }

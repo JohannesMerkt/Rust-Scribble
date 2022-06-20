@@ -52,9 +52,20 @@ pub fn send_chat_message(networkstate: &mut ResMut<NetworkState>, gamestate: &mu
     gamestate.chat_message_input = "".to_string();
 }
 
+pub fn send_ready(networkstate: &mut ResMut<NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
+    if let Some(network_info) = networkstate.info.as_mut() {
+        let player = gamestate.players.iter().find(|player| player.id == network_info.id).unwrap();
+        let msg = json!({
+            "kind": "ready",
+            "ready": !player.ready,
+        });
+        let _ = network::send_message(network_info, msg);
+    }
+}
+
 fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut networkstate: ResMut<NetworkState>, mut gamestate: ResMut<gamestate::GameState>) {
     if timer.0.tick(time.delta()).just_finished() {
-        println!("{}: Check for messages {}", time.seconds_since_startup(), gamestate.chat_messages.len());
+        println!("{}: Check for messages", time.seconds_since_startup());
         //Read a message from the network
         if let Some(network_info) = networkstate.info.as_mut() {
             if network::message_waiting(network_info) {

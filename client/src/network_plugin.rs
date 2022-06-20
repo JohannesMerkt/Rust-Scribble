@@ -77,7 +77,15 @@ fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut net
                             player_id: 0 // TODO send the player id
                         };
                         gamestate.chat_messages.push(chat_message);
-                    }
+                    } /*else if m["kind"].eq("lobby") {
+                        let userValues = m["users"].as_array().unwrap();
+                        let users = 
+                        for userValue in userValues {
+                            let user = userValue.as_array().unwrap();
+                            let name = user[0].as_str().unwrap();
+                            let ready = user[1].as_bool().unwrap();
+                        };
+                    }*/
                     //Display message in the chat window
                     /*if m["kind"].eq("chat_message") {
                         let message = m["message"].as_str().unwrap();

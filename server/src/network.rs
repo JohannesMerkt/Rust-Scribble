@@ -15,12 +15,11 @@ use rayon::prelude::*;
 use std::sync::mpsc::channel;
 
 use crate::gamestate::GameState;
-use crate::lobby::LobbyState;
 
 /// Contains all the information about a client connection.
 pub struct NetworkInfo {
-    /// The name of the client.
-    username: String,
+    /// The id of the client.
+    id: i64,
     /// The tcp_stream of the client.
     tcp_stream: TcpStream,
     /// The public key of the client.
@@ -44,11 +43,11 @@ pub fn tcp_server(game_state: Mutex<GameState>, port: u16) {
     let listener = TcpListener::bind(socket).unwrap();
 
     let global_gs = Arc::new(game_state);
-    let global_lobby = Arc::new(Mutex::new(LobbyState::new()));
 
     println!("Listening on {}", socket);
     let (tx, rx) = channel();
 
+    let mut next_client_id: i64 = 0;
     //Spin off a thread to wait for broadcast messages and send them to all clients
     let arc_net_infos = Arc::new(RwLock::new(Vec::new()));
 
@@ -62,23 +61,28 @@ pub fn tcp_server(game_state: Mutex<GameState>, port: u16) {
 
         match tcp_stream.write_all(public_key.as_bytes()) {
             Ok(_) => {
-                let net_info = RwLock::new(NetworkInfo {
-                    username: "".to_string(),
-                    tcp_stream,
-                    key: *Key::from_slice(public_key.as_bytes()),
-                    secret_key,
-                });
-
-                let arc_net_info = Arc::new(net_info);
-                let thread_gs = Arc::clone(&global_gs);
-                let thread_lobby = Arc::clone(&global_lobby);
-                let thread_net_info = Arc::clone(&arc_net_info);
-                let thread_tx = tx.clone();
-                arc_net_infos.write().unwrap().push(arc_net_info);
-
-                thread::spawn(move || {
-                    handle_client(thread_net_info, thread_gs, thread_lobby, thread_tx);
-                });
+                match tcp_stream.write_all(&next_client_id.to_be_bytes()) {
+                    Ok(_) => {
+                        let net_info = RwLock::new(NetworkInfo {
+                            id: next_client_id,
+                            tcp_stream,
+                            key: *Key::from_slice(public_key.as_bytes()),
+                            secret_key,
+                        });
+                        next_client_id += 1;
+        
+                        let arc_net_info = Arc::new(net_info);
+                        let thread_gs = Arc::clone(&global_gs);
+                        let thread_net_info = Arc::clone(&arc_net_info);
+                        let thread_tx = tx.clone();
+                        arc_net_infos.write().unwrap().push(arc_net_info);
+        
+                        thread::spawn(move || {
+                            handle_client(thread_net_info, thread_gs, thread_tx);
+                        });
+                    }
+                    Err(e) => println!("Error sending id")
+                }
             }
             Err(e) => println!("Error sending public key to {}: {}", addr, e),
         }
@@ -108,17 +112,33 @@ fn generate_keypair() -> (PublicKey, ReusableSecret) {
 fn handle_message(
     msg: serde_json::Value,
     game_state: &Arc<Mutex<GameState>>,
-    lobby: &Arc<Mutex<LobbyState>>,
     tx: &mpsc::Sender<serde_json::Value>,
 ) {
     println!("RCV: {:?}", msg);
 
     if msg["kind"].eq("chat_message") {
+        let mut game_state = game_state.lock().unwrap();
+        // let result = game_state.chat_or_guess(msg["player_id"].as_i64().unwrap(), msg["ready"].as_bool().unwrap());
         let  _ = tx.send(msg);
     } else if msg["kind"].eq("ready") {
-        let mut lobby = lobby.lock().unwrap();
-        lobby.set_ready(msg["username"].to_string(), msg["ready"].as_bool().unwrap());
-        let _ = tx.send(json!(&*lobby));
+        let mut game_state = game_state.lock().unwrap();
+        let result = game_state.set_ready(msg["player_id"].as_i64().unwrap(), msg["ready"].as_bool().unwrap());
+        if result {
+            let _ = tx.send(json!({
+                "kind": "start",
+                "in_game": game_state.in_game,
+                "players": &*game_state.players,
+                "time": game_state.time,
+                "word": game_state.word //TODO only send to drawer
+            }));
+        } else {
+            let _ = tx.send(json!({
+                "kind": "update",
+                "in_game": game_state.in_game,
+                "players": &*game_state.players,
+                "time": game_state.time,
+            }));
+        }
     } else if msg["kind"].eq("add_line") {
         let _ = tx.send(msg);
     }
@@ -136,7 +156,7 @@ fn check_send_broadcast_messages(
     rx: mpsc::Receiver<serde_json::Value>,
 ) {
     //TODO remove disconnected clients from net_infos
-    let remove_clients: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let remove_clients: Arc<Mutex<Vec<i64>>> = Arc::new(Mutex::new(Vec::new()));
 
     loop {
         if let Ok(msg) = rx.recv() {
@@ -144,7 +164,7 @@ fn check_send_broadcast_messages(
                 match send_message(net_info, &msg) {
                     Ok(_) => {}
                     Err(_) => {
-                        remove_clients.lock().unwrap().push(net_info.read().unwrap().username.clone());
+                        remove_clients.lock().unwrap().push(net_info.read().unwrap().id);
                     }
                 }
             });
@@ -152,8 +172,8 @@ fn check_send_broadcast_messages(
 
         if remove_clients.lock().unwrap().len() > 0 {
             let mut net_infos = net_infos.write().unwrap();
-            for username in remove_clients.lock().unwrap().iter() {
-                let index = net_infos.iter().position(|x| x.read().unwrap().username == *username);
+            for player_id in remove_clients.lock().unwrap().iter() {
+                let index = net_infos.iter().position(|x| x.read().unwrap().id == *player_id);
                 if let Some(index) = index {
                     net_infos.remove(index);
                 }
@@ -248,18 +268,19 @@ fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8
 /// * `game_state` - The current game_state.
 /// * `lobby` - The lobby state.
 /// 
-fn client_disconnected(net_info: &Arc<RwLock<NetworkInfo>>, game_state: &Arc<Mutex<GameState>>, lobby: &Arc<Mutex<LobbyState>>, tx: mpsc::Sender<serde_json::Value>) {
+fn client_disconnected(net_info: &Arc<RwLock<NetworkInfo>>, game_state: &Arc<Mutex<GameState>>, tx: mpsc::Sender<serde_json::Value>) {
     let net_info = net_info.read().unwrap();
-    println!("Client {:?} disconnected", net_info.username);
+    println!("Client {:?} disconnected", net_info.id);
     let mut game_state = game_state.lock().unwrap();
-    game_state.remove_player(net_info.username.to_string());
-    let mut lobby = lobby.lock().unwrap();
-    lobby.remove_player(net_info.username.to_string());
+    // game_state.remove_player(net_info.username.to_string());
+    game_state.remove_player(net_info.id);
     let _ = net_info.tcp_stream.shutdown(Shutdown::Both);
-    // broadcast all players in lobby when players join
+    // broadcast update
     let _ = tx.send(json!({
-        "kind": "lobby",
-        "users": lobby.users
+        "kind": "update",
+        "in_game": game_state.in_game,
+        "players": &*game_state.players,
+        "time": game_state.time,
     }));
 }
 
@@ -298,8 +319,8 @@ fn send_message(net_info: &Arc<RwLock<NetworkInfo>>, msg: &serde_json::Value) ->
     //Don't send messages generated by user to the user
     match net_info.write() {
         Ok(mut net_info) => {
-            if !net_info.username.eq(&msg["user"]) {
-                println!("SND {} to {}", &msg, net_info.username);
+            if !net_info.id.eq(&msg["user"]) { // TODO check if this works correctly
+                println!("SND {} to {}", &msg, net_info.id);
                 let key = net_info.key;
                 send_tcp_message(
                     &mut net_info.tcp_stream,
@@ -348,7 +369,6 @@ fn send_ping_message(net_info: &Arc<RwLock<NetworkInfo>>, time_elapsed: Duration
 fn handle_client(
     net_info: Arc<RwLock<NetworkInfo>>,
     game_state: Arc<Mutex<GameState>>,
-    lobby_state: Arc<Mutex<LobbyState>>,
     tx: mpsc::Sender<serde_json::Value>,
 ) {
 
@@ -366,20 +386,21 @@ fn handle_client(
         let mut username = String::new();
         let _ = conn.read_line(&mut username);
 
-        net_info.username = username.trim().to_string();
+        let username = username.trim().to_string();
 
         let client_public: PublicKey = PublicKey::from(buffer);
         let shared_secret = net_info.secret_key.diffie_hellman(&client_public);
         net_info.key = *Key::from_slice(shared_secret.as_bytes());
 
         {
-            let username = net_info.username.clone();
-            let mut lobby_state = lobby_state.lock().unwrap();
-            lobby_state.add_player(username);
+            let mut game_state = game_state.lock().unwrap();
+            game_state.add_player(net_info.id, username);
             // broadcast all players in lobby when players join
             let _ = tx.send(json!({
-                "kind": "lobby",
-                "users": &*lobby_state.users
+                "kind": "update",
+                "in_game": game_state.in_game,
+                "players": &*game_state.players,
+                "time": game_state.time,
             }));
         }
     }  
@@ -389,13 +410,13 @@ fn handle_client(
     //Start of the main loop to read messages and send keepalive pings
     loop {
         if let Ok(msg) = read_tcp_message(&net_info) {
-            handle_message(msg, &game_state, &lobby_state, &tx);
+            handle_message(msg, &game_state, &tx);
             keepalive = Instant::now();
         }
 
         match send_ping_message(&net_info, Instant::now().duration_since(keepalive)) {
             Some(false) => {
-                client_disconnected(&net_info, &game_state, &lobby_state, tx);
+                client_disconnected(&net_info, &game_state, tx);
                 break;
             },
             Some(true) => keepalive = Instant::now(),

@@ -11,9 +11,9 @@ struct Line {
 }
 
 #[derive(Serialize, Deserialize)]
-struct Player {
+pub struct Player {
     /// player id
-    id: i32,
+    id: i64,
     /// name of the player
     name: String,
     /// the score of the player
@@ -39,7 +39,7 @@ pub struct ChatMessage {
 #[derive(Serialize, Deserialize)]
 pub struct GameState {
     /// are we in lobby or ingame?
-    lobby: bool,
+    pub in_game: bool,
     /// the clients stroke settings for drawing
     pub stroke: Stroke,
     /// the lines on the canvas
@@ -49,7 +49,7 @@ pub struct GameState {
     /// all messages in chat
     pub chat_messages: Vec<ChatMessage>,
     /// all players in the lobby
-    players: Vec<Player>,
+    pub players: Vec<Player>,
     /// the word that has to be drawn (only populated when drawing)
     word: String,
     /// remaining time for round in seconds
@@ -59,7 +59,7 @@ pub struct GameState {
 impl Default for GameState {
     fn default() -> Self {
         GameState { 
-            lobby: true, 
+            in_game: false, 
             stroke: Stroke::new(10.,Color32::BLACK), 
             lines: Vec::new(), 
             chat_message_input: String::new(), 

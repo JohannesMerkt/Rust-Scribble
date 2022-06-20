@@ -14,8 +14,8 @@ use x25519_dalek::{EphemeralSecret, PublicKey};
 
 /// Contains all the information about a client connection.
 pub struct NetworkInfo {
-    /// The name of the client.
-    username: String,
+    /// The id of the client.
+    id: i64,
     /// The tcp_stream of the client.
     tcp_stream: TcpStream,
     /// The shared secret of the client and server.
@@ -242,6 +242,10 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
         let mut buffer = [0; 32];
         let _ = tcp_stream.read(&mut buffer)?;
         let server_key: PublicKey = PublicKey::from(buffer);
+        let mut id_buffer = [0; 8];
+        let _ = tcp_stream.read(&mut id_buffer)?;
+        let id: i64 = i64::from_be_bytes(id_buffer);
+        println!("Recieved id {}!", id);
         tcp_stream.write_all(public_key.as_bytes())?;
         tcp_stream.write_all(username.as_bytes())?;
 
@@ -251,7 +255,7 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
         let key: chacha20poly1305::Key = *Key::from_slice(shared_secret.as_bytes());
         
         Ok(NetworkInfo {
-            username: username.to_string(),
+            id: id,
             tcp_stream,
             key,
         })

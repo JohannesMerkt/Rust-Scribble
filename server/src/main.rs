@@ -1,7 +1,6 @@
 #![crate_name = "rust_scribble_server"]
 mod gamestate;
 mod network;
-mod lobby;
 
 use std::sync::Mutex;
 use clap::Parser;

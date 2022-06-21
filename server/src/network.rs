@@ -6,13 +6,12 @@ use rand_core::OsRng;
 use serde_json::json;
 use std::{error};
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Write};
-use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream, Shutdown};
+use std::net::{TcpStream};
 use std::sync::{Arc, Mutex, mpsc, RwLock};
-use std::thread;
 use std::time::{Duration, Instant};
 use x25519_dalek::{PublicKey, ReusableSecret};
 use rayon::prelude::*;
-use std::sync::mpsc::channel;
+
 
 use crate::gamestate::GameState;
 use crate::lobby::LobbyState;
@@ -20,70 +19,15 @@ use crate::lobby::LobbyState;
 /// Contains all the information about a client connection.
 pub struct NetworkInfo {
     /// The name of the client.
-    username: String,
+    pub(crate) username: String,
     /// The tcp_stream of the client.
-    tcp_stream: TcpStream,
+    pub(crate)tcp_stream: TcpStream,
     /// The public key of the client.
-    key: Key,
+    pub(crate) key: Key,
     /// The shared secret of the client and server.
-    secret_key: ReusableSecret,
+    pub(crate) secret_key: ReusableSecret,
 }
 
-
-/// Runs the listining server for incoming connections.
-/// Starts a new thread for each incoming connection
-///
-/// # Arguments
-/// * `game_state` - The game state to be updated.
-/// * `port` - The port to listen on.
-///
-pub fn tcp_server(game_state: Mutex<GameState>, port: u16) {
-    //TODO move this function into main.rs 
-    let loopback = Ipv4Addr::new(0, 0, 0, 0);
-    let socket = SocketAddrV4::new(loopback, port);
-    let listener = TcpListener::bind(socket).unwrap();
-
-    let global_gs = Arc::new(game_state);
-    let global_lobby = Arc::new(Mutex::new(LobbyState::new()));
-
-    println!("Listening on {}", socket);
-    let (tx, rx) = channel();
-
-    //Spin off a thread to wait for broadcast messages and send them to all clients
-    let arc_net_infos = Arc::new(RwLock::new(Vec::new()));
-
-    let net_infos = Arc::clone(&arc_net_infos);
-    thread::spawn(move || check_send_broadcast_messages(&net_infos, rx));
-
-    loop {
-        let (public_key, secret_key) = generate_keypair();
-        let (mut tcp_stream, addr) = listener.accept().unwrap();
-        println!("Connection received! {:?} is Connected.", addr);
-
-        match tcp_stream.write_all(public_key.as_bytes()) {
-            Ok(_) => {
-                let net_info = RwLock::new(NetworkInfo {
-                    username: "".to_string(),
-                    tcp_stream,
-                    key: *Key::from_slice(public_key.as_bytes()),
-                    secret_key,
-                });
-
-                let arc_net_info = Arc::new(net_info);
-                let thread_gs = Arc::clone(&global_gs);
-                let thread_lobby = Arc::clone(&global_lobby);
-                let thread_net_info = Arc::clone(&arc_net_info);
-                let thread_tx = tx.clone();
-                arc_net_infos.write().unwrap().push(arc_net_info);
-
-                thread::spawn(move || {
-                    handle_client(thread_net_info, thread_gs, thread_lobby, thread_tx);
-                });
-            }
-            Err(e) => println!("Error sending public key to {}: {}", addr, e),
-        }
-    }
-}
 
 /// Generates a new Public Private keypair.
 /// 
@@ -91,7 +35,7 @@ pub fn tcp_server(game_state: Mutex<GameState>, port: u16) {
 /// * `public_key` - A public key.
 /// * `secret_key` - A secret key.
 /// 
-fn generate_keypair() -> (PublicKey, ReusableSecret) {
+pub fn generate_keypair() -> (PublicKey, ReusableSecret) {
     let secret = ReusableSecret::new(OsRng);
     let public = PublicKey::from(&secret);
     (public, secret)
@@ -131,7 +75,7 @@ fn handle_message(
 /// * `net_infos` - Vector of all the network information of each client.
 /// * `rx` - The channel to receive broadcast messages from.
 /// 
-fn check_send_broadcast_messages(
+pub(crate) fn check_send_broadcast_messages(
     net_infos: &Arc<RwLock<Vec<Arc<RwLock<NetworkInfo>>>>>,
     rx: mpsc::Receiver<serde_json::Value>,
 ) {
@@ -339,7 +283,7 @@ fn send_ping_message(net_info: &Arc<RwLock<NetworkInfo>>, time_elapsed: Duration
 /// * `lobby_state` - The lobby state.
 /// * `tx` - The channel to send messages to the broadcase thread.
 /// 
-fn handle_client(
+pub(crate) fn handle_client(
     net_info: Arc<RwLock<NetworkInfo>>,
     game_state: Arc<Mutex<GameState>>,
     lobby_state: Arc<Mutex<LobbyState>>,

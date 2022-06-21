@@ -7,10 +7,10 @@ use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Write};
 use std::net::{TcpStream};
 use std::sync::{Arc, Mutex, mpsc, RwLock};
 use std::time::{Duration, Instant};
-use x25519_dalek::{PublicKey};
+use x25519_dalek::{PublicKey, ReusableSecret};
 use rayon::prelude::*;
 
-use rust_scribble_common::network_info::{NetworkInfo, check_checksum, encrypt_json};
+use rust_scribble_common::network_common::{NetworkInfo, check_checksum, encrypt_json};
 
 
 use crate::gamestate::GameState;
@@ -251,12 +251,8 @@ fn client_initialize(
     net_info.username = username.trim().to_string();
 
     let client_public: PublicKey = PublicKey::from(buffer);
-    if let Some(shared) = &net_info.secret_key {
-        let shared_secret = shared.diffie_hellman(&client_public);
-        net_info.key = *Key::from_slice(shared_secret.as_bytes());
-    } else {
-        return false;
-    }
+    let shared_secret = net_info.secret_key.as_ref().unwrap().diffie_hellman(&client_public);
+    net_info.key = *Key::from_slice(shared_secret.as_bytes());
 
     {
         let username = net_info.username.clone();
@@ -288,7 +284,7 @@ pub(crate) fn handle_client(
     tx: mpsc::Sender<serde_json::Value>,
 ) {
     //TODO handle false case for failure to connect
-    let res = client_initialize(&net_info, &game_state, &lobby_state, &tx);
+    let _ = client_initialize(&net_info, &game_state, &lobby_state, &tx);
     let mut keepalive = Instant::now();
 
     //Start of the main loop to read messages and send keepalive pings

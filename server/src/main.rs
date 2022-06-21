@@ -6,7 +6,8 @@ mod lobby;
 use std::{sync::{Mutex, Arc, mpsc, RwLock}, net::{Ipv4Addr, SocketAddrV4, TcpListener}, io::Write, thread};
 use chacha20poly1305::Key;
 use clap::Parser;
-use rust_scribble_common::network_info::{generate_keypair, NetworkInfo};
+use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
+use x25519_dalek::ReusableSecret;
 
 use crate::lobby::LobbyState;
 
@@ -62,7 +63,7 @@ pub fn tcp_server(port: u16) {
                     username: "".to_string(),
                     tcp_stream,
                     key: *Key::from_slice(public_key.as_bytes()),
-                    secret_key: None,
+                    secret_key: Some(secret_key),
                 });
 
                 let arc_net_info = Arc::new(net_info);

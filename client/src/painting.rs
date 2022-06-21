@@ -2,7 +2,7 @@ use egui::*;
 use serde_json::json;
 use crate::network::*;
 
-use rust_scribble_common::network_info::NetworkInfo;
+use rust_scribble_common::network_common::NetworkInfo;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct Painting{

@@ -8,7 +8,7 @@ use std::net::TcpStream;
 use std::str;
 use std::time::Duration;
 use x25519_dalek::{PublicKey};
-use rust_scribble_common::network_info::{check_checksum, NetworkInfo, encrypt_json, generate_keypair};
+use rust_scribble_common::network_common::{check_checksum, NetworkInfo, encrypt_json, generate_keypair};
 
 /// Sends a message to a client.
 /// 

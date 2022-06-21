@@ -1,45 +1,21 @@
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use generic_array::GenericArray;
-use rand::Rng;
-use rand_core::OsRng;
 use serde_json::json;
 use std::{error};
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Write};
 use std::net::{TcpStream};
 use std::sync::{Arc, Mutex, mpsc, RwLock};
 use std::time::{Duration, Instant};
-use x25519_dalek::{PublicKey, ReusableSecret};
+use x25519_dalek::{PublicKey};
 use rayon::prelude::*;
+
+use rust_scribble_common::network_info::{NetworkInfo, check_checksum, encrypt_json};
 
 
 use crate::gamestate::GameState;
 use crate::lobby::LobbyState;
 
-/// Contains all the information about a client connection.
-pub struct NetworkInfo {
-    /// The name of the client.
-    pub(crate) username: String,
-    /// The tcp_stream of the client.
-    pub(crate)tcp_stream: TcpStream,
-    /// The public key of the client.
-    pub(crate) key: Key,
-    /// The shared secret of the client and server.
-    pub(crate) secret_key: ReusableSecret,
-}
-
-
-/// Generates a new Public Private keypair.
-/// 
-/// # Returns
-/// * `public_key` - A public key.
-/// * `secret_key` - A secret key.
-/// 
-pub fn generate_keypair() -> (PublicKey, ReusableSecret) {
-    let secret = ReusableSecret::new(OsRng);
-    let public = PublicKey::from(&secret);
-    (public, secret)
-}
 
 /// Handles a client message.
 /// 
@@ -106,15 +82,6 @@ pub(crate) fn check_send_broadcast_messages(
     }
 }
 
-/// Verifies if the checksum of the chipher text is correct.
-/// 
-/// # Arguments
-/// * `cipher_text` - The cipher text to be verified.
-/// * `checksum` - The checksum to be verified.
-/// 
-fn check_checksum(ciphertext: &[u8], checksum: u32) -> bool {
-    checksum == crc32fast::hash(ciphertext)
-}
 
 /// Reads a tcp_message from the client.
 /// 
@@ -165,25 +132,6 @@ fn read_tcp_message(
 
 }
 
-
-/// Encrypts a JSON message
-/// 
-/// # Arguments
-/// * `json_message` - The message to be encrypted.
-/// * `share_key` - The shared key to be used for encryption.
-/// 
-/// # Returns
-/// * `(msg_size, nonce,  ciphermsg, checksum)` - A tuple with the size of the whole message(inclusive nonce, checksum, and message), nonce, the encrypted message and the checksum.
-///
-fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8>, u32) {
-    let nonce = *Nonce::from_slice(rand::thread_rng().gen::<[u8; 12]>().as_slice());
-    let ciphertext = ChaCha20Poly1305::new(&shared_key).encrypt(&nonce, &json_message[..]).expect("encryption failure!");
-    let checksum = crc32fast::hash(&ciphertext);
-
-    //Add 12 bytes for the nonce and 4 bytes for the checksum
-    let msg_size = ciphertext.len() + 16;
-    (msg_size, nonce, ciphertext, checksum)
-}
 
 /// Removes a disconnected client from the lobby, gamestate and closes the tcp_stream.
 /// 
@@ -271,6 +219,56 @@ fn send_ping_message(net_info: &Arc<RwLock<NetworkInfo>>, time_elapsed: Duration
     }
 }
 
+/// Initializes the client for the first time
+/// 
+/// # Arguments
+/// * `net_info` - The network information of the client.
+/// * `game_state` - The current game_state.
+/// * `lobby` - The lobby state.
+/// 
+/// # Returns
+/// * bool - True if the client is connected, false if not.
+/// 
+fn client_initialize(
+    net_info: &Arc<RwLock<NetworkInfo>>,
+    game_state: &Arc<Mutex<GameState>>,
+    lobby_state: &Arc<Mutex<LobbyState>>,
+    tx: &mpsc::Sender<serde_json::Value>,
+) -> bool {
+    let mut net_info = net_info.write().unwrap();
+    let _ = net_info
+        .tcp_stream
+        .set_read_timeout(Some(Duration::from_millis(50)));
+
+    let mut buffer = [0; 32];
+    let _ = net_info.tcp_stream.read(&mut buffer);
+
+    //TODO First message should be a user initialization message
+    let mut conn = BufReader::new(&net_info.tcp_stream);
+    let mut username = String::new();
+    let _ = conn.read_line(&mut username);
+
+    net_info.username = username.trim().to_string();
+
+    let client_public: PublicKey = PublicKey::from(buffer);
+    if let Some(shared) = &net_info.secret_key {
+        let shared_secret = shared.diffie_hellman(&client_public);
+        net_info.key = *Key::from_slice(shared_secret.as_bytes());
+    } else {
+        return false;
+    }
+
+    {
+        let username = net_info.username.clone();
+        let mut lobby_state = lobby_state.lock().unwrap();
+        lobby_state.add_player(username);
+        let _ = tx.send(json!(&*lobby_state));
+    }
+
+    true
+}
+
+
 /// The Main loop to handle each individual clients
 /// 
 /// This function is should be run in a separate thread.
@@ -289,35 +287,8 @@ pub(crate) fn handle_client(
     lobby_state: Arc<Mutex<LobbyState>>,
     tx: mpsc::Sender<serde_json::Value>,
 ) {
-
-    {
-        let mut net_info = net_info.write().unwrap();
-        let _ = net_info
-            .tcp_stream
-            .set_read_timeout(Some(Duration::from_millis(50)));
-
-        let mut buffer = [0; 32];
-        let _ = net_info.tcp_stream.read(&mut buffer);
-
-        //TODO First message should be a user initialization message
-        let mut conn = BufReader::new(&net_info.tcp_stream);
-        let mut username = String::new();
-        let _ = conn.read_line(&mut username);
-
-        net_info.username = username.trim().to_string();
-
-        let client_public: PublicKey = PublicKey::from(buffer);
-        let shared_secret = net_info.secret_key.diffie_hellman(&client_public);
-        net_info.key = *Key::from_slice(shared_secret.as_bytes());
-
-        {
-            let username = net_info.username.clone();
-            let mut lobby_state = lobby_state.lock().unwrap();
-            lobby_state.add_player(username);
-            let _ = tx.send(json!(&*lobby_state));
-        }
-    }  
-
+    //TODO handle false case for failure to connect
+    let res = client_initialize(&net_info, &game_state, &lobby_state, &tx);
     let mut keepalive = Instant::now();
 
     //Start of the main loop to read messages and send keepalive pings

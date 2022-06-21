@@ -1,5 +1,6 @@
 use egui::{Pos2, Color32};
 use egui::{TextStyle, ScrollArea, Key};
+use rust_scribble_common::network_info::NetworkInfo;
 use serde_json::json;
 use rayon::prelude::*;
 use crate::network::*;

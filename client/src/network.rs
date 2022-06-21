@@ -1,74 +1,14 @@
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use generic_array::GenericArray;
-use rand::Rng;
-use rand_core::OsRng;
 use serde_json::Value;
 use std::error;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::net::TcpStream;
 use std::str;
 use std::time::Duration;
-use x25519_dalek::{EphemeralSecret, PublicKey};
-
-
-/// Contains all the information about a client connection.
-pub struct NetworkInfo {
-    /// The name of the client.
-    username: String,
-    /// The tcp_stream of the client.
-    tcp_stream: TcpStream,
-    /// The shared secret of the client and server.
-    key: Key,
-}
-
-/// Generates a new Public Private keypair.
-/// 
-/// # Returns
-/// * `public_key` - A public key.
-/// * `secret_key` - A secret key.
-/// 
-fn generate_keypair() -> (PublicKey, EphemeralSecret) {
-    let secret = EphemeralSecret::new(OsRng);
-    let public = PublicKey::from(&secret);
-    (public, secret)
-}
-
-/// Encrypts a JSON message
-/// 
-/// # Arguments
-/// * `json_message` - The message to be encrypted.
-/// * `share_key` - The shared key to be used for encryption.
-/// 
-/// # Returns
-/// * `(msg_size, nonce,  ciphermsg, checksum)` - A tuple with the size of the whole message(inclusive nonce, checksum, and message), nonce, the encrypted message and the checksum.
-///
-fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8>, u32) {
-    let nonce = *Nonce::from_slice(rand::thread_rng().gen::<[u8; 12]>().as_slice());
-    let cipher = ChaCha20Poly1305::new(&shared_key);
-
-    let ciphertext = cipher
-        .encrypt(&nonce, &json_message[..])
-        .expect("encryption failure!");
-
-    let checksum = crc32fast::hash(&ciphertext);
-
-    //Add 12 bytes for the nonce and 4 bytes for the checksum
-    let msg_size = ciphertext.len() + 16;
-
-    (msg_size, nonce, ciphertext, checksum)
-}
-
-/// Verifies if the checksum of the chipher text is correct.
-/// 
-/// # Arguments
-/// * `cipher_text` - The cipher text to be verified.
-/// * `checksum` - The checksum to be verified.
-/// 
-fn check_checksum(ciphertext: &[u8], checksum: u32) -> bool {
-    let checksum_calc = crc32fast::hash(ciphertext);
-    checksum == checksum_calc
-}
+use x25519_dalek::{PublicKey};
+use rust_scribble_common::network_info::{check_checksum, NetworkInfo, encrypt_json, generate_keypair};
 
 /// Sends a message to a client.
 /// 
@@ -254,6 +194,7 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
             username: username.to_string(),
             tcp_stream,
             key,
+            secret_key: None,
         })
     } else {
         Err(Error::new(ErrorKind::Other, "Failed to connect to server"))

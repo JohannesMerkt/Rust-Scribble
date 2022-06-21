@@ -1,16 +1,12 @@
-use chacha20poly1305::aead::{Aead, NewAead};
-use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
-use generic_array::GenericArray;
+use chacha20poly1305::Key;
 use serde_json::json;
-use std::{error};
-use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Write};
-use std::net::{TcpStream};
+use std::io::{BufRead, BufReader, Error, Read};
 use std::sync::{Arc, Mutex, mpsc, RwLock};
 use std::time::{Duration, Instant};
-use x25519_dalek::{PublicKey, ReusableSecret};
+use x25519_dalek::PublicKey;
 use rayon::prelude::*;
 
-use rust_scribble_common::network_common::{NetworkInfo, check_checksum, encrypt_json};
+use rust_scribble_common::network_common::*;
 
 
 use crate::gamestate::GameState;
@@ -83,55 +79,6 @@ pub(crate) fn check_send_broadcast_messages(
 }
 
 
-/// Reads a tcp_message from the client.
-/// 
-/// # Arguments
-/// * `net_info` - The network information of the client.
-/// 
-/// # Returns
-/// * `Ok(msg)` - The message read from the client in JSON format.
-/// * `Err(e)` - The error that occured.
-/// 
-fn read_tcp_message(
-    net_info: &Arc<RwLock<NetworkInfo>>,
-) -> Result<serde_json::Value, Box<dyn error::Error>> {
-
-    let mut size = [0; (usize::BITS / 8) as usize];
-    let msg_size;
-    let mut msg_buf;
-    let cipher;
-
-    {
-        let mut net_info = net_info.write().unwrap();
-        net_info.tcp_stream.read_exact(&mut size)?;
-        msg_size = usize::from_le_bytes(size);
-
-        msg_buf = vec![0; msg_size];
-        net_info.tcp_stream.read_exact(&mut msg_buf)?;
-        cipher = ChaCha20Poly1305::new(&net_info.key);
-    }
-
-    let nonce: Nonce = GenericArray::clone_from_slice(&msg_buf[0..12]);
-    let ciphertext = &msg_buf[12..msg_size - 4];
-    let checksum: u32 = u32::from_le_bytes(msg_buf[msg_size - 4..msg_size].try_into()?);
-
-    //if check_checksum of ciphertext returns false, throw error
-    if !check_checksum(ciphertext, checksum) {
-        return Err(Box::new(Error::new(
-            ErrorKind::InvalidData,
-            "Checksum failed",
-        )));
-    }
-
-    let json_message = match cipher.decrypt(&nonce, ciphertext) {
-        Ok(plaintext) => serde_json::from_slice(&plaintext)?,
-        Err(_) => return Err(Box::new(Error::new(ErrorKind::Other, "Decryption failed!"))),
-    };
-
-    Ok(json_message)
-
-}
-
 
 /// Removes a disconnected client from the lobby, gamestate and closes the tcp_stream.
 /// 
@@ -147,28 +94,6 @@ fn client_disconnected(net_info: &Arc<RwLock<NetworkInfo>>, game_state: &Arc<Mut
     game_state.remove_player(net_info.username.to_string());
     let mut lobby = lobby.lock().unwrap();
     lobby.remove_player(net_info.username.to_string());
-}
-
-/// Sends a message to a client.
-/// 
-/// # Arguments
-/// * `tcp_stream` - The tcp_stream of the client.
-/// * `net_msg: (usize, Nonce, Vec<u8>, u32)` - The prepared encrypted tuple from encrypt_json() to be sent to the client
-/// 
-/// # Returns
-/// * `Ok(())` - The message was sent successfully.
-/// * `Err(e)` - The error that occured.
-/// 
-fn send_tcp_message(
-    tcp_stream: &mut TcpStream,
-    net_msg: (usize, Nonce, Vec<u8>, u32),
-) -> Result<(), Error> {
-    //TODO send 1 message not 3
-    tcp_stream.write_all(&usize::to_le_bytes(net_msg.0))?;
-    tcp_stream.write_all(&net_msg.1)?;
-    tcp_stream.write_all(&net_msg.2)?;
-    tcp_stream.write_all(&u32::to_le_bytes(net_msg.3))?;
-    Ok(())
 }
 
 /// Send a JSON message to a client.
@@ -289,7 +214,7 @@ pub(crate) fn handle_client(
 
     //Start of the main loop to read messages and send keepalive pings
     loop {
-        if let Ok(msg) = read_tcp_message(&net_info) {
+        if let Ok(msg) = read_tcp_message(&mut net_info.write().unwrap()) {
             handle_message(msg, &game_state, &lobby_state, &tx);
             keepalive = Instant::now();
         }

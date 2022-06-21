@@ -1,6 +1,6 @@
 use egui::{Pos2, Color32};
 use egui::{TextStyle, ScrollArea, Key};
-use rust_scribble_common::network_common::NetworkInfo;
+use rust_scribble_common::network_common::{NetworkInfo, message_waiting};
 use serde_json::json;
 use rayon::prelude::*;
 use crate::network::*;
@@ -49,10 +49,9 @@ impl eframe::App for TemplateApp {
             //Read a message from the network
             if let Some(network_info) = net_info.as_mut() {
                 if message_waiting(network_info) {
-                    println!("Message waiting");
-                }   
-                if let Ok(msg)= read_messages(network_info, 5) {
-                    handle_message(msg, chat_messages, painting);
+                    if let Ok(msg)= read_messages(network_info, 5) {
+                        handle_message(msg, chat_messages, painting);
+                    }
                 }
             }
         }

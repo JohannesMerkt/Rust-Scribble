@@ -7,7 +7,6 @@ use std::{sync::{Mutex, Arc, mpsc, RwLock}, net::{Ipv4Addr, SocketAddrV4, TcpLis
 use chacha20poly1305::Key;
 use clap::Parser;
 use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
-use x25519_dalek::ReusableSecret;
 
 use crate::lobby::LobbyState;
 

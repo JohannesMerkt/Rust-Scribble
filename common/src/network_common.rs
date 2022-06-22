@@ -60,16 +60,25 @@ pub fn generate_keypair() -> (PublicKey, ReusableSecret) {
 /// # Returns
 /// * `(msg_size, nonce,  ciphermsg, checksum)` - A tuple with the size of the whole message(inclusive nonce, checksum, and message), nonce, the encrypted message and the checksum.
 ///
-pub fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8>, u32) {
+pub fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> Vec<u8> {
     let nonce = *Nonce::from_slice(rand::thread_rng().gen::<[u8; 12]>().as_slice());
     let ciphertext = ChaCha20Poly1305::new(&shared_key).encrypt(&nonce, &json_message[..]).expect("encryption failure!");
     let checksum = crc32fast::hash(&json_message[..]);
 
     //Add 12 bytes for the nonce and 4 bytes for the checksum
     let msg_size = ciphertext.len() + 16;
-    (msg_size, nonce, ciphertext, checksum)
+    pack_network_message(msg_size, nonce, ciphertext, checksum)
 }
 
+
+fn pack_network_message(msg_size: usize, nonce: Nonce, ciphertext: Vec<u8>, checksum: u32) -> Vec<u8> {
+    let mut message = vec![];
+    message.extend_from_slice(&msg_size.to_le_bytes());
+    message.extend_from_slice(&nonce);
+    message.extend_from_slice(&ciphertext);
+    message.extend_from_slice(&checksum.to_le_bytes());
+    message
+}
 
 /// Checks if any messages are waiting to be read from the network
 /// 
@@ -98,16 +107,8 @@ pub fn message_waiting(net_info: &mut NetworkInfo) -> bool {
 /// * `Ok(())` - The message was sent successfully.
 /// * `Err(e)` - The error that occured.
 /// 
-pub fn send_tcp_message(
-    tcp_stream: &mut TcpStream,
-    net_msg: (usize, Nonce, Vec<u8>, u32),
-) -> Result<(), Error> {
-    //TODO send 1 message not 3
-    tcp_stream.write_all(&usize::to_le_bytes(net_msg.0))?;
-    tcp_stream.write_all(&net_msg.1)?;
-    tcp_stream.write_all(&net_msg.2)?;
-    tcp_stream.write_all(&u32::to_le_bytes(net_msg.3))?;
-    Ok(())
+pub fn send_tcp_message(tcp_stream: &mut TcpStream, net_msg: Vec<u8>) -> Result<(), Error> {
+    Ok(tcp_stream.write_all(&net_msg)?)
 }
 
 /// Sends a JSON message to the server

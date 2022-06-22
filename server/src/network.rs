@@ -1,6 +1,6 @@
 use chacha20poly1305::Key;
 use serde_json::json;
-use std::io::{BufRead, BufReader, Error, Read};
+use std::io::{BufRead, BufReader, Read};
 use std::sync::{Arc, Mutex, mpsc, RwLock};
 use std::time::{Duration, Instant};
 use x25519_dalek::PublicKey;

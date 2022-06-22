@@ -32,8 +32,11 @@ pub struct NetworkInfo {
 /// * `cipher_text` - The cipher text to be verified.
 /// * `checksum` - The checksum to be verified.
 /// 
-pub fn check_checksum(ciphertext: &[u8], checksum: u32) -> bool {
-    checksum == crc32fast::hash(ciphertext)
+pub fn check_checksum(text: &[u8], checksum: u32) -> Result<(),Error> {
+    match checksum == crc32fast::hash(text) {
+        true => Ok(()),
+        false => Err(Error::new(ErrorKind::InvalidData, "Checksum is not correct"))
+    }
 }
 
 /// Generates a new Public Private keypair.
@@ -60,7 +63,7 @@ pub fn generate_keypair() -> (PublicKey, ReusableSecret) {
 pub fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> (usize, Nonce, Vec<u8>, u32) {
     let nonce = *Nonce::from_slice(rand::thread_rng().gen::<[u8; 12]>().as_slice());
     let ciphertext = ChaCha20Poly1305::new(&shared_key).encrypt(&nonce, &json_message[..]).expect("encryption failure!");
-    let checksum = crc32fast::hash(&ciphertext);
+    let checksum = crc32fast::hash(&json_message[..]);
 
     //Add 12 bytes for the nonce and 4 bytes for the checksum
     let msg_size = ciphertext.len() + 16;
@@ -157,16 +160,11 @@ pub fn read_tcp_message(
     let ciphertext = &msg_buf[12..msg_size - 4];
     let checksum: u32 = u32::from_le_bytes(msg_buf[msg_size - 4..msg_size].try_into()?);
 
-    //if check_checksum of ciphertext returns false, throw error
-    if !check_checksum(ciphertext, checksum) {
-        return Err(Box::new(Error::new(
-            ErrorKind::InvalidData,
-            "Checksum failed",
-        )));
-    }
-
     let json_message = match cipher.decrypt(&nonce, ciphertext) {
-        Ok(plaintext) => serde_json::from_slice(&plaintext)?,
+        Ok(plaintext) => {    //if check_checksum of ciphertext returns false, throw error
+            check_checksum(&plaintext, checksum)?;
+            serde_json::from_slice(&plaintext)?
+        },
         Err(_) => return Err(Box::new(Error::new(ErrorKind::Other, "Decryption failed!"))),
     };
 

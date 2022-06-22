@@ -9,6 +9,7 @@ use chacha20poly1305::{Key, ChaCha20Poly1305, Nonce};
 use generic_array::GenericArray;
 use rand::Rng;
 use rand_core::OsRng;
+use serde_json::Value;
 use x25519_dalek::{PublicKey, ReusableSecret};
 
 
@@ -38,8 +39,8 @@ pub fn check_checksum(ciphertext: &[u8], checksum: u32) -> bool {
 /// Generates a new Public Private keypair.
 /// 
 /// # Returns
-/// * `public_key` - A public key.
-/// * `secret_key` - A secret key.
+/// * `public_key` - A Public key.
+/// * `secret_key` - A ReusableSecret key.
 /// 
 pub fn generate_keypair() -> (PublicKey, ReusableSecret) {
     let secret = ReusableSecret::new(OsRng);
@@ -105,6 +106,25 @@ pub fn send_tcp_message(
     tcp_stream.write_all(&u32::to_le_bytes(net_msg.3))?;
     Ok(())
 }
+
+/// Sends a JSON message to the server
+/// 
+/// # Arguments
+/// * `net_info` - The network information of the client.
+/// * `msg` - The message JSON Value to be sent.
+/// 
+/// # Returns
+/// * `Ok(())` - The message was sent successfully.
+/// * `Err(e)` - The error that occured.
+/// 
+pub fn send_message(net_info: &mut NetworkInfo, msg: &Value) -> Result<(), Error> {
+    send_tcp_message(
+        &mut net_info.tcp_stream,
+        encrypt_json(msg.to_string().into_bytes(), net_info.key),
+    )
+}
+
+
 
 /// Reads a tcp_message from the client.
 /// 

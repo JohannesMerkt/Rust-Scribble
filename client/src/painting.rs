@@ -1,8 +1,7 @@
 use egui::*;
 use serde_json::json;
-use crate::network::*;
 
-use rust_scribble_common::network_common::NetworkInfo;
+use rust_scribble_common::network_common::{NetworkInfo, send_message};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct Painting{
@@ -97,7 +96,7 @@ impl Painting {
                 }
             });
             if let Some(network_info) = net_info.as_mut() {
-                let _ = send_message(network_info, msg);
+                let _ = send_message(network_info, &msg);
             }
             let new_line = Line { position: vec![], stroke: current_line.stroke};
             self.all_lines.push(new_line);

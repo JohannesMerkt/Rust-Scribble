@@ -1,5 +1,4 @@
 use chacha20poly1305::Key;
-use serde_json::Value;
 use std::error;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::net::TcpStream;
@@ -7,24 +6,6 @@ use std::str;
 use std::time::Duration;
 use x25519_dalek::{PublicKey};
 use rust_scribble_common::network_common::*;
-
-/// Sends a JSON message to the server
-/// 
-/// # Arguments
-/// * `net_info` - The network information of the client.
-/// * `msg` - The message JSON Value to be sent.
-/// 
-/// # Returns
-/// * `Ok(())` - The message was sent successfully.
-/// * `Err(e)` - The error that occured.
-/// 
-pub fn send_message(net_info: &mut NetworkInfo, msg: Value) -> Result<(), Error> {
-    send_tcp_message(
-        &mut net_info.tcp_stream,
-        encrypt_json(msg.to_string().into_bytes(), net_info.key),
-    )
-}
-
 
 /// Try and read a message from the server
 /// 

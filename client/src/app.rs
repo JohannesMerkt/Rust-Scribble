@@ -1,6 +1,6 @@
 use egui::{Pos2, Color32};
 use egui::{TextStyle, ScrollArea, Key};
-use rust_scribble_common::network_common::{NetworkInfo, message_waiting};
+use rust_scribble_common::network_common::{NetworkInfo, message_waiting, send_message};
 use serde_json::json;
 use rayon::prelude::*;
 use crate::network::*;
@@ -86,7 +86,7 @@ impl eframe::App for TemplateApp {
                         });
                         
                         if let Some(network_info) = net_info.as_mut() {
-                            let _ = send_message(network_info, msg);
+                            let _ = send_message(network_info, &msg);
                         }
                         *message = "".to_string();
                     }
@@ -107,7 +107,7 @@ impl eframe::App for TemplateApp {
                     });
                     
                     if let Some(network_info) = net_info.as_mut() {
-                        let _ = send_message(network_info, msg);
+                        let _ = send_message(network_info, &msg);
                     }
                 }
             });

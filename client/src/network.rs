@@ -1,4 +1,9 @@
-use chacha20poly1305::Key;
+use chacha20poly1305::aead::{Aead, NewAead};
+use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+use generic_array::GenericArray;
+use rand::Rng;
+use rand_core::OsRng;
+use serde_json::Value;
 use std::error;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::net::TcpStream;
@@ -78,6 +83,10 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
         let mut buffer = [0; 32];
         let _ = tcp_stream.read(&mut buffer)?;
         let server_key: PublicKey = PublicKey::from(buffer);
+        let mut id_buffer = [0; 8];
+        let _ = tcp_stream.read(&mut id_buffer)?;
+        let id: i64 = i64::from_be_bytes(id_buffer);
+        println!("Recieved id {}!", id);
         tcp_stream.write_all(public_key.as_bytes())?;
         tcp_stream.write_all(username.as_bytes())?;
 
@@ -87,7 +96,7 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
         let key: chacha20poly1305::Key = *Key::from_slice(shared_secret.as_bytes());
         
         Ok(NetworkInfo {
-            username: username.to_string(),
+            id,
             tcp_stream,
             key,
             secret_key: None,

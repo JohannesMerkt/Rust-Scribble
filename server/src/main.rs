@@ -1,7 +1,6 @@
 #![crate_name = "rust_scribble_server"]
 mod gamestate;
 mod network;
-mod lobby;
 
 use std::{sync::{Mutex, Arc, mpsc, RwLock}, net::{Ipv4Addr, SocketAddrV4, TcpListener}, io::Write, thread};
 use chacha20poly1305::Key;

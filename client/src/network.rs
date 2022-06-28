@@ -65,7 +65,7 @@ pub fn read_messages(
 /// 
 /// # Returns
 /// * `Ok(net_info)` - A NetworkInfo struct containing the tcp_stream and the key.
-/// * `Err(e)` - The error that occured.
+/// * `Err(e)` - The error that occurred.
 /// 
 pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<NetworkInfo, Error> {
     let (public_key, secret_key) = generate_keypair();

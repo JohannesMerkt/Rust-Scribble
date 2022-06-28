@@ -26,7 +26,7 @@ pub struct NetworkInfo {
 
 
 
-/// Verifies if the checksum of the chipher text is correct.
+/// Verifies if the checksum of the cipher text is correct.
 /// 
 /// # Arguments
 /// * `cipher_text` - The cipher text to be verified.
@@ -58,7 +58,7 @@ pub fn generate_keypair() -> (PublicKey, ReusableSecret) {
 /// * `share_key` - The shared key to be used for encryption.
 /// 
 /// # Returns
-/// * `(msg_size, nonce,  ciphermsg, checksum)` - A tuple with the size of the whole message(inclusive nonce, checksum, and message), nonce, the encrypted message and the checksum.
+/// * packed_message Vec<u8> - The packed network encrypted message.
 ///
 pub fn encrypt_json(json_message: Vec<u8>, shared_key: Key) -> Vec<u8> {
     let nonce = *Nonce::from_slice(rand::thread_rng().gen::<[u8; 12]>().as_slice());
@@ -105,7 +105,7 @@ pub fn message_waiting(net_info: &mut NetworkInfo) -> bool {
 /// 
 /// # Returns
 /// * `Ok(())` - The message was sent successfully.
-/// * `Err(e)` - The error that occured.
+/// * `Err(e)` - The error that occurred.
 /// 
 pub fn send_tcp_message(tcp_stream: &mut TcpStream, net_msg: Vec<u8>) -> Result<(), Error> {
     Ok(tcp_stream.write_all(&net_msg)?)
@@ -119,7 +119,7 @@ pub fn send_tcp_message(tcp_stream: &mut TcpStream, net_msg: Vec<u8>) -> Result<
 /// 
 /// # Returns
 /// * `Ok(())` - The message was sent successfully.
-/// * `Err(e)` - The error that occured.
+/// * `Err(e)` - The error that occurred.
 /// 
 pub fn send_message(net_info: &mut NetworkInfo, msg: &Value) -> Result<(), Error> {
     send_tcp_message(
@@ -137,7 +137,7 @@ pub fn send_message(net_info: &mut NetworkInfo, msg: &Value) -> Result<(), Error
 /// 
 /// # Returns
 /// * `Ok(msg)` - The message read from the client in JSON format.
-/// * `Err(e)` - The error that occured.
+/// * `Err(e)` - The error that occurred.
 /// 
 pub fn read_tcp_message(
      net_info: &mut NetworkInfo,

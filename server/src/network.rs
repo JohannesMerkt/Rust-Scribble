@@ -173,7 +173,7 @@ fn client_initialize(
 /// * `net_info` - The network information of the client.
 /// * `game_state` - The current game_state.
 /// * `lobby_state` - The lobby state.
-/// * `tx` - The channel to send messages to the broadcase thread.
+/// * `tx` - The channel to send messages to the broadcast thread.
 /// 
 pub(crate) fn handle_client(
     net_info: Arc<RwLock<NetworkInfo>>,

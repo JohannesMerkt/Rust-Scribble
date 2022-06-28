@@ -25,7 +25,7 @@ fn main() {
     tcp_server(args.port);
 }
 
-/// Runs the listining server for incoming connections.
+/// Runs the listening server for incoming connections.
 /// Starts a new thread for each incoming connection
 ///
 /// # Arguments

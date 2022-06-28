@@ -1,5 +1,6 @@
 use bevy::{prelude::*};
 use bevy_egui::{egui, EguiContext};
+use rayon::prelude::*;
 use crate::network_plugin;
 use crate::gamestate;
 
@@ -38,18 +39,12 @@ fn render_lobby_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut 
 
         // render a button for ready or unready
         if let Some(net_info) = networkstate.info.as_mut() {
-            let player_result = gamestate.players.iter().find(|player| player.id == net_info.id);
+            let player_result = gamestate.players.par_iter().find_any(|player| player.id == net_info.id);
             if let Some(player) = player_result {
-                if player.ready {
-                    if ui.button("Not Ready").clicked() {
-                        network_plugin::send_ready(networkstate, gamestate);
-                    }
-                } else {
-                    if ui.button("Ready").clicked() {
-                        network_plugin::send_ready(networkstate, gamestate);
-                    }
+                if (player.ready && ui.button("Not Ready").clicked())|| ui.button("Ready").clicked(){
+                    network_plugin::send_ready(networkstate, gamestate);
                 }
-            }
+            }   
         }
     });
 }
@@ -124,7 +119,7 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
             let mut shapes = vec![];
             for line in &gamestate.lines {
                 if line.positions.len() >= 2 {
-                    let points: Vec<egui::Pos2> = line.positions.iter().map(|p| to_screen * *p).collect();
+                    let points: Vec<egui::Pos2> = line.positions.par_iter().map(|p| to_screen * *p).collect();
                     shapes.push(egui::Shape::line(points, line.stroke));
                 }
             }
@@ -145,7 +140,7 @@ fn render_chat_area(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin:
         100,
         |ui, _| {
             for chat_message in gamestate.chat_messages.iter() {
-                let search_player_result = gamestate.players.iter().find(|player| player.id == chat_message.player_id);
+                let search_player_result = gamestate.players.par_iter().find_any(|player| player.id == chat_message.player_id);
                 if let Some(player) = search_player_result {
                     ui.label(format!("{}: {}",player.name, chat_message.message));
                     ui.set_min_width(100.0);

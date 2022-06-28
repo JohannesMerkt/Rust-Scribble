@@ -1,31 +1,11 @@
-use chacha20poly1305::aead::{Aead, NewAead};
-use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
-use generic_array::GenericArray;
-use rand::Rng;
-use rand_core::OsRng;
-use serde_json::Value;
+use chacha20poly1305::Key;
 use std::error;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::net::TcpStream;
 use std::str;
 use std::time::Duration;
-use x25519_dalek::{PublicKey};
+use x25519_dalek::PublicKey;
 use rust_scribble_common::network_common::*;
-
-/// Try and read a message from the server
-/// 
-/// # Arguments
-/// * `net_info` - A mutable reference to the NetworkInfo struct
-/// 
-/// # Returns
-/// * `Ok(messages) - A vector of JSON value messages
-/// * `Err(error) - An error if something went wrong
-/// 
-pub fn read_message(
-     net_info: &mut NetworkInfo,
-) -> Result<Vec<serde_json::Value>, Box<dyn error::Error>> {
-    read_messages(net_info, 1)
-}
 
 /// Try and read messages from the server
 /// 
@@ -86,7 +66,8 @@ pub fn connect_to_server(ip_addr: &str, port: u16, username: &str) -> Result<Net
         let mut id_buffer = [0; 8];
         let _ = tcp_stream.read(&mut id_buffer)?;
         let id: i64 = i64::from_be_bytes(id_buffer);
-        println!("Recieved id {}!", id);
+
+        println!("Received id {}!", id);
         tcp_stream.write_all(public_key.as_bytes())?;
         tcp_stream.write_all(username.as_bytes())?;
 

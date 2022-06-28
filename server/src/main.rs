@@ -6,8 +6,7 @@ use std::{sync::{Mutex, Arc, mpsc, RwLock}, net::{Ipv4Addr, SocketAddrV4, TcpLis
 use chacha20poly1305::Key;
 use clap::Parser;
 use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
-
-use crate::lobby::LobbyState;
+use network::handle_client;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -39,10 +38,10 @@ pub fn tcp_server(port: u16) {
 
     let game_state = Mutex::new(gamestate::GameState::new());
     let global_gs = Arc::new(game_state);
-    let global_lobby = Arc::new(Mutex::new(LobbyState::new()));
 
     println!("Listening on {}", socket);
     let (tx, rx) = mpsc::channel();
+    let mut next_client_id: i64 = 1;
 
     //Spin off a thread to wait for broadcast messages and send them to all clients
     let arc_net_infos = Arc::new(RwLock::new(Vec::new()));
@@ -55,25 +54,31 @@ pub fn tcp_server(port: u16) {
         let (mut tcp_stream, addr) = listener.accept().unwrap();
         println!("Connection received! {:?} is Connected.", addr);
 
+        //TODO Clean up this nested mess
         match tcp_stream.write_all(public_key.as_bytes()) {
             Ok(_) => {
-                let net_info = RwLock::new(NetworkInfo {
-                    username: "".to_string(),
-                    tcp_stream,
-                    key: *Key::from_slice(public_key.as_bytes()),
-                    secret_key: Some(secret_key),
-                });
+                match tcp_stream.write_all(&next_client_id.to_be_bytes()) {
+                    Ok(_) => {
+                        let net_info = RwLock::new(NetworkInfo {
+                            id: next_client_id,
+                            tcp_stream,
+                            key: *Key::from_slice(public_key.as_bytes()),
+                            secret_key: Some(secret_key),
+                        });
 
-                let arc_net_info = Arc::new(net_info);
-                let thread_gs = Arc::clone(&global_gs);
-                let thread_lobby = Arc::clone(&global_lobby);
-                let thread_net_info = Arc::clone(&arc_net_info);
-                let thread_tx = tx.clone();
-                arc_net_infos.write().unwrap().push(arc_net_info);
+                        let arc_net_info = Arc::new(net_info);
+                        let thread_gs = Arc::clone(&global_gs);
+                        let thread_net_info = Arc::clone(&arc_net_info);
+                        let thread_tx = tx.clone();
+                        arc_net_infos.write().unwrap().push(arc_net_info);
 
-                thread::spawn(move || {
-                    network::handle_client(thread_net_info, thread_gs, thread_lobby, thread_tx);
-                });
+                        thread::spawn(move || {
+                            handle_client(thread_net_info, thread_gs, thread_tx);
+                        });
+                        next_client_id += 1;
+                    }
+                    Err(_e) => println!("Error sending id"),
+                }
             }
             Err(e) => println!("Error sending public key to {}: {}", addr, e),
         }

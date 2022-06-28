@@ -20,14 +20,6 @@ pub struct Player {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ChatMessage {
-    /// id of player who sent the message
-    pub player_id: i64, // TODO use smaller number? u8 ?
-    /// the message the player has sent
-    pub message: String,
-}
-
-#[derive(Serialize, Deserialize)]
 pub struct GameState {
     /// are we in lobby or ingame?
     pub in_game: bool,

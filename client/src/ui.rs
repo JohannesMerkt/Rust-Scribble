@@ -37,14 +37,19 @@ fn render_lobby_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut 
         render_chat_area(ui, networkstate, gamestate);
         render_player_list(ui, gamestate);
 
-        // render a button for ready or unready
         if let Some(net_info) = networkstate.info.as_mut() {
-            let player_result = gamestate.players.par_iter().find_any(|player| player.id == net_info.id);
+            let player_result = gamestate.players.iter().find(|player| player.id == net_info.id);
             if let Some(player) = player_result {
-                if (player.ready && ui.button("Not Ready").clicked())|| ui.button("Ready").clicked(){
-                    network_plugin::send_ready(networkstate, gamestate);
+                if player.ready {
+                    if ui.button("Not Ready").clicked() {
+                        network_plugin::send_ready(networkstate, false);
+                    }
+                } else {
+                    if ui.button("Ready").clicked() {
+                        network_plugin::send_ready(networkstate, true);
+                    }
                 }
-            }   
+            }
         }
     });
 }

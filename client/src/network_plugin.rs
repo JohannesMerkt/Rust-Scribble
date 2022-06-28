@@ -4,6 +4,7 @@ use crate::gamestate;
 use serde_json::json;
 use rayon::prelude::*;
 use rust_scribble_common::network_common::*;
+use rust_scribble_common::messages_common::*;
 
 pub struct NetworkState {
     /// client player name
@@ -54,13 +55,9 @@ pub fn send_chat_message(networkstate: &mut ResMut<NetworkState>, gamestate: &mu
     gamestate.chat_message_input = "".to_string();
 }
 
-pub fn send_ready(networkstate: &mut ResMut<NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
+pub fn send_ready(networkstate: &mut ResMut<NetworkState>, ready_state: bool) {
     if let Some(network_info) = networkstate.info.as_mut() {
-        let player = gamestate.players.par_iter().find_any(|player| player.id == network_info.id).unwrap();
-        let msg = json!({
-            "kind": "ready",
-            "ready": !player.ready,
-        });
+        let msg = json!(ReadyMessage::new(network_info.id, ready_state));
         let _ = send_message(network_info, &msg);
     }
 }

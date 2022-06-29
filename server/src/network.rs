@@ -8,7 +8,6 @@ use x25519_dalek::PublicKey;
 use rayon::prelude::*;
 use rust_scribble_common::network_common::*;
 use rust_scribble_common::gamestate_common::*;
-use rust_scribble_common::gamestate_server::*;
 
 /// Handles a client message.
 /// 
@@ -28,25 +27,11 @@ fn handle_message(
 
     //TODO create message structs and remove unpack and repacking
     if msg["kind"].eq("chat_message") {
-        let  _ = tx.send(json!({
-            "kind": "chat_message",
-            "player_id": player_id,
-            "message": msg["message"].to_string()
-        }));
+        let  _ = tx.send(msg);
     } else if msg["kind"].eq("ready") {
         let mut game_state = game_state.lock().unwrap();
-        let result = game_state.set_ready(player_id, msg["ready"].as_bool().unwrap());
-        if result {
-            let _ = tx.send(json!({
-                "kind": "start",
-                "in_game": game_state.in_game,
-                "players": &*game_state.players,
-                "time": game_state.time,
-                "word": game_state.word //TODO only send to drawer
-            }));
-        } else {
-            let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
-        }
+        game_state.set_ready(player_id, msg["ready"].as_bool().unwrap());
+        let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
     } else if msg["kind"].eq("add_line") {
         let _ = tx.send(msg);
     } else if msg["kind"].eq("disconnect") {
@@ -217,12 +202,7 @@ pub(crate) fn handle_client(
                 let gs = game_state.lock().unwrap();
                 //TODO Remove from NetInfos and send message to all clients
                 let _ = tx.send(json!(DisconnectMessage::new(player_id)));
-                let _ = tx.send(json!({
-                    "kind": "update",
-                    "in_game": gs.in_game,
-                    "players": &*gs.players,
-                    "time": gs.time,
-                }));
+                let _ = tx.send(json!(GameStateUpdate::new(gs.clone())));
                 break;
             },
             Some(true) => keepalive = Instant::now(),

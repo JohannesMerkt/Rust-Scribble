@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-
-use crate::gamestate_common::GameState;
+use crate::gamestate_common::{GameState, Line};
 
 #[derive(Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -66,6 +65,21 @@ impl GameStateUpdate {
         GameStateUpdate {
             kind: "update".to_string(),
             game_state: json!(game_state)
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PaintingUpdate {
+    pub kind: String,
+    pub line: Value,
+}
+
+impl PaintingUpdate {
+    pub fn new(line: Line) -> Self {
+        PaintingUpdate {
+            kind: "add_line".to_string(),
+            line: json!(line),
         }
     }
 }

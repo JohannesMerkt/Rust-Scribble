@@ -4,7 +4,7 @@ use rayon::prelude::*;
 
 use rust_scribble_common::gamestate_common::*;
 use crate::network_plugin;
-use crate::clientstate::{ClientState, Line};
+use crate::clientstate::ClientState;
 
 /// this system handles rendering the ui
 pub fn render_ui(mut egui_context: ResMut<EguiContext>, mut networkstate: ResMut<network_plugin::NetworkState>, mut clientstate: ResMut<ClientState>) {
@@ -46,10 +46,8 @@ fn render_lobby_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut 
                     if ui.button("Not Ready").clicked() {
                         network_plugin::send_ready(networkstate, false);
                     }
-                } else {
-                    if ui.button("Ready").clicked() {
-                        network_plugin::send_ready(networkstate, true);
-                    }
+                } else if ui.button("Ready").clicked() {
+                    network_plugin::send_ready(networkstate, true);
                 }
             }
         }
@@ -63,6 +61,7 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
 
         if ui.button("Disconnect").clicked() {
             network_plugin::send_disconnect(networkstate);
+            clientstate.game_state.in_game = false;
         }
     });
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
@@ -115,7 +114,7 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
                     response.mark_changed();
                 }
             } else if !current_line.positions.is_empty() {
-                network_plugin::send_line(current_line, networkstate);
+                network_plugin::send_line(networkstate, current_line);
                 let width = clientstate.stroke.width;
                 let color = clientstate.stroke.color;
                 let new_line = Line { positions: vec![], stroke: egui::Stroke::new(width, color)};

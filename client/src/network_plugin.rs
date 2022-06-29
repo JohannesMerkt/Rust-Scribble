@@ -1,10 +1,11 @@
 use bevy::prelude::*;
 use crate::network;
-use crate::gamestate::*;
+use crate::clientstate::*;
 use serde_json::json;
 use rayon::prelude::*;
 use rust_scribble_common::network_common::*;
 use rust_scribble_common::messages_common::*;
+use rust_scribble_common::gamestate_common::*;
 
 pub struct NetworkState {
     /// client player name
@@ -43,13 +44,12 @@ pub fn connect(networkstate: &mut ResMut<NetworkState>) {
     }
 }
 
-pub fn send_chat_message(networkstate: &mut ResMut<NetworkState>, gamestate: &mut ResMut<GameState>) {
+pub fn send_chat_message(networkstate: &mut ResMut<NetworkState>, msg: String) {
 
     if let Some(network_info) = networkstate.info.as_mut() {
-        let msg = json!(ChatMessage::new(network_info.id, gamestate.chat_message_input.clone()));
+        let msg = json!(ChatMessage::new(network_info.id, msg));
         let _ = send_message(network_info, &msg);
     }
-    gamestate.chat_message_input = "".to_string();
 }
 
 pub fn send_ready(networkstate: &mut ResMut<NetworkState>, ready_state: bool) {
@@ -85,7 +85,7 @@ pub fn send_line(line: &mut Line, networkstate: &mut ResMut<NetworkState>) {
     }
 }
 
-fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut networkstate: ResMut<NetworkState>, mut gamestate: ResMut<GameState>) {
+fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut networkstate: ResMut<NetworkState>, mut clientstate: ResMut<ClientState>) {
     if timer.0.tick(time.delta()).just_finished() {
 
         //Read a message from the network
@@ -106,27 +106,11 @@ fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut net
                                 message: message.to_string(),
                                 player_id
                             };
-                            gamestate.chat_messages.push(chat_message);
+                            clientstate.chat_messages.push(chat_message);
                         } else if m["kind"].eq("update") { 
-                            let in_game = m["in_game"].as_bool().unwrap();
-                            let raw_players = m["players"].as_array().unwrap();
-                            let mut players: Vec<Player> = Vec::new();
-                            for raw_player in raw_players {
-                                players.push(Player {
-                                    id: raw_player["id"].as_i64().unwrap(),
-                                    name: raw_player["name"].as_str().unwrap().to_string(),
-                                    score: raw_player["score"].as_i64().unwrap(),
-                                    ready: raw_player["ready"].as_bool().unwrap(),
-                                    drawing: raw_player["drawing"].as_bool().unwrap(),
-                                    playing: raw_player["playing"].as_bool().unwrap(),
-                                    guessed_word: raw_player["guessed_word"].as_bool().unwrap()
-                                });
+                            if let Ok(new_gs) = serde_json::from_str(&m["game_state"].to_string()) {
+                                clientstate.game_state = new_gs;
                             }
-                            let time = m["time"].as_i64().unwrap();
-                            gamestate.in_game = in_game;
-                            gamestate.time = time;
-                            gamestate.players = players;
-                            println!("gamestate {}", gamestate.players.len());
                         } else if m["kind"].eq("add_line") {
                             let x_positions:Vec<f64> = m["line"]["x_positions"].as_array().unwrap().iter().map(|pos| pos.as_f64().unwrap()).collect();
                             let y_positions:Vec<f64> = m["line"]["y_positions"].as_array().unwrap().iter().map(|pos| pos.as_f64().unwrap()).collect();
@@ -142,8 +126,8 @@ fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut net
                                 positions: pos_line,
                                 stroke: egui::Stroke::new(width as f32, color),
                             };
-                            let length = gamestate.lines.len();
-                            gamestate.lines.insert(length - 1, line);
+                            let length = clientstate.lines.len();
+                            clientstate.lines.insert(length - 1, line);
                         }
                     }
                 }

@@ -1,11 +1,11 @@
 #![crate_name = "rust_scribble_server"]
-mod gamestate;
 mod network;
 
 use std::{sync::{Mutex, Arc, mpsc, RwLock}, net::{Ipv4Addr, SocketAddrV4, TcpListener}, io::Write, thread};
 use chacha20poly1305::Key;
 use clap::Parser;
 use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
+use rust_scribble_common::gamestate_common::{GameState};
 use network::handle_client;
 
 #[derive(Parser, Debug)]
@@ -36,7 +36,7 @@ pub fn tcp_server(port: u16) {
     let socket = SocketAddrV4::new(loopback, port);
     let listener = TcpListener::bind(socket).unwrap();
 
-    let game_state = Mutex::new(gamestate::GameState::new());
+    let game_state = Mutex::new(GameState::default());
     let global_gs = Arc::new(game_state);
 
     println!("Listening on {}", socket);

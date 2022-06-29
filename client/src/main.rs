@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 mod network;
-mod gamestate;
+mod clientstate;
 mod ui;
 mod network_plugin;
 
@@ -23,7 +23,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(EguiPlugin)
-        .add_plugin(gamestate::GameStatePlugin)
+        .add_plugin(clientstate::ClientStatePlugin)
         .add_plugin(network_plugin::NetworkPlugin)
         // Systems that create Egui widgets should be run during the `CoreStage::Update` stage,
         // or after the `EguiSystem::BeginFrame` system (which belongs to the `CoreStage::PreUpdate` stage).

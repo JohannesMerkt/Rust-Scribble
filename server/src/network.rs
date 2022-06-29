@@ -1,5 +1,5 @@
 use chacha20poly1305::Key;
-use rust_scribble_common::messages_common::DisconnectMessage;
+use rust_scribble_common::messages_common::{DisconnectMessage, GameStateUpdate};
 use serde_json::json;
 use std::io::{BufRead, BufReader, Read};
 use std::sync::{Arc, Mutex, mpsc, RwLock};
@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 use x25519_dalek::PublicKey;
 use rayon::prelude::*;
 use rust_scribble_common::network_common::*;
-use crate::gamestate::GameState;
-
+use rust_scribble_common::gamestate_common::*;
+use rust_scribble_common::gamestate_server::*;
 
 /// Handles a client message.
 /// 
@@ -45,12 +45,7 @@ fn handle_message(
                 "word": game_state.word //TODO only send to drawer
             }));
         } else {
-            let _ = tx.send(json!({
-                "kind": "update",
-                "in_game": game_state.in_game,
-                "players": &*game_state.players,
-                "time": game_state.time,
-            }));
+            let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
         }
     } else if msg["kind"].eq("add_line") {
         let _ = tx.send(msg);
@@ -58,12 +53,7 @@ fn handle_message(
         client_disconnected(player_id, game_state);
         let game_state = game_state.lock().unwrap();
         let _ = tx.send(json!(msg));
-        let _ = tx.send(json!({
-            "kind": "update",
-            "in_game": game_state.in_game,
-            "players": &*game_state.players,
-            "time": game_state.time,
-        }));
+        let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
     }
 }
 
@@ -185,12 +175,7 @@ fn client_initialize(
         let mut game_state = game_state.lock().unwrap();
         game_state.add_player(net_info.id, username);
         // broadcast all players in lobby when players join
-        let _ = tx.send(json!({
-            "kind": "update",
-            "in_game": game_state.in_game,
-            "players": &*game_state.players,
-            "time": game_state.time,
-        }));
+        let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
     }
 
     true

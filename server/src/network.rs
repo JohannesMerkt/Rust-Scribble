@@ -1,4 +1,5 @@
 use chacha20poly1305::Key;
+use rust_scribble_common::messages_common::DisconnectMessage;
 use serde_json::json;
 use std::io::{BufRead, BufReader, Read};
 use std::sync::{Arc, Mutex, mpsc, RwLock};
@@ -56,6 +57,7 @@ fn handle_message(
     } else if msg["kind"].eq("disconnect") {
         client_disconnected(player_id, game_state);
         let game_state = game_state.lock().unwrap();
+        let _ = tx.send(json!(msg));
         let _ = tx.send(json!({
             "kind": "update",
             "in_game": game_state.in_game,
@@ -81,6 +83,22 @@ pub(crate) fn check_send_broadcast_messages(
 
     loop {
         if let Ok(msg) = rx.recv() {
+
+            if msg["kind"].eq("disconnect") {
+                let mut remove_clients = remove_clients.lock().unwrap();
+                remove_clients.push(msg["player_id"].as_i64().unwrap());
+            } 
+
+            if remove_clients.lock().unwrap().len() > 0 {
+                let mut net_infos = net_infos.write().unwrap();
+                for player_id in remove_clients.lock().unwrap().iter() {
+                    let index = net_infos.iter().position(|x| x.read().unwrap().id == *player_id);
+                    if let Some(index) = index {
+                        net_infos.remove(index);
+                    }
+                }
+            }
+
             net_infos.write().unwrap().par_iter_mut().for_each(|net_info| {
                 match send_message(&mut net_info.write().unwrap(), &msg) {
                     Ok(_) => {}
@@ -89,16 +107,6 @@ pub(crate) fn check_send_broadcast_messages(
                     }
                 }
             });
-        }
-
-        if remove_clients.lock().unwrap().len() > 0 {
-            let mut net_infos = net_infos.write().unwrap();
-            for player_id in remove_clients.lock().unwrap().iter() {
-                let index = net_infos.iter().position(|x| x.read().unwrap().id == *player_id);
-                if let Some(index) = index {
-                    net_infos.remove(index);
-                }
-            }
         }
     }
 }
@@ -129,7 +137,7 @@ fn client_disconnected(player_id: i64, game_state: &Arc<Mutex<GameState>>) {
 /// * `None` - There was no ping sent.
 /// 
 fn send_ping_message(net_info: &Arc<RwLock<NetworkInfo>>, time_elapsed: Duration) -> Option<bool> {
-    if time_elapsed.as_secs() > 30 {
+    if time_elapsed.as_secs() > 15 {
         match send_message(&mut net_info.write().unwrap(), &json!({"kind": "ping"})) {
             Ok(_) => Some(true),
             Err(_) => Some(false)
@@ -223,6 +231,7 @@ pub(crate) fn handle_client(
                 client_disconnected(player_id, &game_state);
                 let gs = game_state.lock().unwrap();
                 //TODO Remove from NetInfos and send message to all clients
+                let _ = tx.send(json!(DisconnectMessage::new(player_id)));
                 let _ = tx.send(json!({
                     "kind": "update",
                     "in_game": gs.in_game,

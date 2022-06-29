@@ -10,6 +10,16 @@ pub struct ChatMessage {
     pub message: String,
 }
 
+impl ChatMessage {
+    pub fn new(player_id: i64, message: String) -> Self {
+        ChatMessage {
+            kind: "chat_message".to_string(),
+            player_id,
+            message,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct ReadyMessage {
     pub kind: String,
@@ -23,6 +33,21 @@ impl ReadyMessage {
             kind: "ready".to_string(),
             player_id,
             ready,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct DisconnectMessage {
+    pub kind: String,
+    pub player_id: i64,
+}
+
+impl DisconnectMessage {
+    pub fn new(player_id: i64) -> Self {
+        DisconnectMessage {
+            kind: "disconnect".to_string(),
+            player_id,
         }
     }
 }

@@ -53,6 +53,15 @@ fn handle_message(
         }
     } else if msg["kind"].eq("add_line") {
         let _ = tx.send(msg);
+    } else if msg["kind"].eq("disconnect") {
+        client_disconnected(player_id, game_state);
+        let game_state = game_state.lock().unwrap();
+        let _ = tx.send(json!({
+            "kind": "update",
+            "in_game": game_state.in_game,
+            "players": &*game_state.players,
+            "time": game_state.time,
+        }));
     }
 }
 
@@ -103,17 +112,10 @@ pub(crate) fn check_send_broadcast_messages(
 /// * `game_state` - The current game_state.
 /// * `lobby` - The lobby state.
 /// 
-fn client_disconnected(net_info: &Arc<RwLock<NetworkInfo>>, game_state: &Arc<Mutex<GameState>>, tx: mpsc::Sender<serde_json::Value>) {
-    let net_info = net_info.read().unwrap();
-    println!("Client {:?} disconnected", net_info.id);
+fn client_disconnected(player_id: i64, game_state: &Arc<Mutex<GameState>>) {
+    println!("Client {:?} disconnected", player_id);
     let mut game_state = game_state.lock().unwrap();
-    game_state.remove_player(net_info.id);
-    let _ = tx.send(json!({
-        "kind": "update",
-        "in_game": game_state.in_game,
-        "players": &*game_state.players,
-        "time": game_state.time,
-    }));
+    game_state.remove_player(player_id);
 }
 
 /// Send a JSON message to check if the client is still connected.
@@ -218,7 +220,15 @@ pub(crate) fn handle_client(
 
         match send_ping_message(&net_info, Instant::now().duration_since(keepalive)) {
             Some(false) => {
-                client_disconnected(&net_info, &game_state, tx);
+                client_disconnected(player_id, &game_state);
+                let gs = game_state.lock().unwrap();
+                //TODO Remove from NetInfos and send message to all clients
+                let _ = tx.send(json!({
+                    "kind": "update",
+                    "in_game": gs.in_game,
+                    "players": &*gs.players,
+                    "time": gs.time,
+                }));
                 break;
             },
             Some(true) => keepalive = Instant::now(),

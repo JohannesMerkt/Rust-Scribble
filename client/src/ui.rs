@@ -60,7 +60,7 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
         render_player_list(ui, gamestate);
 
         if ui.button("Disconnect").clicked() {
-            println!("Disconnect from server");
+            network_plugin::send_disconnect(networkstate);
         }
     });
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {

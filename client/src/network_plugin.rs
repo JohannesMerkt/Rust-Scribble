@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use crate::network;
-use crate::gamestate;
+use crate::gamestate::*;
 use serde_json::json;
 use rayon::prelude::*;
 use rust_scribble_common::network_common::*;
@@ -43,13 +43,10 @@ pub fn connect(networkstate: &mut ResMut<NetworkState>) {
     }
 }
 
-pub fn send_chat_message(networkstate: &mut ResMut<NetworkState>, gamestate: &mut ResMut<gamestate::GameState>) {
-    let msg = json!({
-        "kind": "chat_message",
-        "message": gamestate.chat_message_input,
-    });
-    
+pub fn send_chat_message(networkstate: &mut ResMut<NetworkState>, gamestate: &mut ResMut<GameState>) {
+
     if let Some(network_info) = networkstate.info.as_mut() {
+        let msg = json!(ChatMessage::new(network_info.id, gamestate.chat_message_input.clone()));
         let _ = send_message(network_info, &msg);
     }
     gamestate.chat_message_input = "".to_string();
@@ -62,7 +59,14 @@ pub fn send_ready(networkstate: &mut ResMut<NetworkState>, ready_state: bool) {
     }
 }
 
-pub fn send_line(line: &mut gamestate::Line, networkstate: &mut ResMut<NetworkState>) {
+pub fn send_disconnect(networkstate: &mut ResMut<NetworkState>) {
+    if let Some(network_info) = networkstate.info.as_mut() {
+        let msg = json!(DisconnectMessage::new(network_info.id));
+        let _ = send_message(network_info, &msg);
+    }
+}
+
+pub fn send_line(line: &mut Line, networkstate: &mut ResMut<NetworkState>) {
     let x_positions: Vec<f32> = line.positions.par_iter().map(|pos2| pos2.x).collect();
     let y_positions: Vec<f32> = line.positions.par_iter().map(|pos2| pos2.y).collect();
     let width = line.stroke.width;
@@ -81,7 +85,7 @@ pub fn send_line(line: &mut gamestate::Line, networkstate: &mut ResMut<NetworkSt
     }
 }
 
-fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut networkstate: ResMut<NetworkState>, mut gamestate: ResMut<gamestate::GameState>) {
+fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut networkstate: ResMut<NetworkState>, mut gamestate: ResMut<GameState>) {
     if timer.0.tick(time.delta()).just_finished() {
 
         //Read a message from the network
@@ -97,7 +101,8 @@ fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut net
                         if m["kind"].eq("chat_message") {
                             let message = m["message"].as_str().unwrap();
                             let player_id = m["player_id"].as_i64().unwrap();
-                            let chat_message = gamestate::ChatMessage {
+                            let chat_message = ChatMessage {
+                                kind: "chat_message".to_string(),
                                 message: message.to_string(),
                                 player_id
                             };
@@ -105,9 +110,9 @@ fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut net
                         } else if m["kind"].eq("update") { 
                             let in_game = m["in_game"].as_bool().unwrap();
                             let raw_players = m["players"].as_array().unwrap();
-                            let mut players: Vec<gamestate::Player> = Vec::new();
+                            let mut players: Vec<Player> = Vec::new();
                             for raw_player in raw_players {
-                                players.push(gamestate::Player {
+                                players.push(Player {
                                     id: raw_player["id"].as_i64().unwrap(),
                                     name: raw_player["name"].as_str().unwrap().to_string(),
                                     score: raw_player["score"].as_i64().unwrap(),
@@ -133,7 +138,7 @@ fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut net
                             let width = m["line"]["width"].as_f64().unwrap();
                             let color_values: Vec<u8> = m["line"]["color"].as_array().unwrap().iter().map(|col| col.as_u64().unwrap() as u8).collect();
                             let color = egui::Color32::from_rgb(color_values[0], color_values[1], color_values[2]);
-                            let line: gamestate::Line = gamestate::Line {
+                            let line: Line = Line {
                                 positions: pos_line,
                                 stroke: egui::Stroke::new(width as f32, color),
                             };

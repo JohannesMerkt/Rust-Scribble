@@ -1,6 +1,7 @@
 use egui::Stroke;
 use egui::Pos2;
 use egui::Color32;
+use rust_scribble_common::messages_common::ChatMessage;
 use serde::{Deserialize, Serialize};
 use bevy::prelude::*;
 
@@ -26,14 +27,6 @@ pub struct Player {
     pub playing: bool,
     /// has player guessed the word?
     pub guessed_word: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ChatMessage {
-    /// id of player who sent the message
-    pub player_id: i64, // TODO use smaller number? u8 ?
-    /// the message the player has sent
-    pub message: String,
 }
 
 #[derive(Serialize, Deserialize)]

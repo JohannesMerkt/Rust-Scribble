@@ -107,10 +107,6 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
                 let canvas_pos = from_screen * pointer_pos;
                 if current_line.positions.last() != Some(&canvas_pos) {
                     current_line.positions.push(canvas_pos);
-                    //let width = &gamestate.stroke.width;
-                    //let color = gamestate.stroke.color;
-                    //let stroke = egui::Stroke::new(width, color);
-                    //current_line.stroke = stroke;
                     response.mark_changed();
                 }
             } else if !current_line.positions.is_empty() {

@@ -35,9 +35,8 @@ fn handle_message(
     } else if msg["kind"].eq("add_line") {
         let _ = tx.send(msg);
     } else if msg["kind"].eq("disconnect") {
-        client_disconnected(player_id, game_state);
+        client_disconnected(player_id, &game_state);
         let game_state = game_state.lock().unwrap();
-        let _ = tx.send(json!(msg));
         let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
     }
 }
@@ -59,29 +58,24 @@ pub(crate) fn check_send_broadcast_messages(
     loop {
         if let Ok(msg) = rx.recv() {
 
-            if msg["kind"].eq("disconnect") {
-                let mut remove_clients = remove_clients.lock().unwrap();
-                remove_clients.push(msg["player_id"].as_i64().unwrap());
-            } 
-
-            if remove_clients.lock().unwrap().len() > 0 {
-                let mut net_infos = net_infos.write().unwrap();
-                for player_id in remove_clients.lock().unwrap().iter() {
-                    let index = net_infos.iter().position(|x| x.read().unwrap().id == *player_id);
-                    if let Some(index) = index {
-                        net_infos.remove(index);
-                    }
-                }
-            }
-
-            net_infos.write().unwrap().par_iter_mut().for_each(|net_info| {
-                match send_message(&mut net_info.write().unwrap(), &msg) {
+            net_infos.write().unwrap().iter_mut().for_each(|net_info| {
+                let mut net_info = net_info.write().unwrap();
+                match send_message(&mut net_info, &msg) {
                     Ok(_) => {}
                     Err(_) => {
-                        remove_clients.lock().unwrap().push(net_info.read().unwrap().id);
+                        remove_clients.lock().unwrap().push(net_info.id);
                     }
                 }
             });
+
+            if remove_clients.lock().unwrap().len() > 0 {
+                for id in remove_clients.lock().unwrap().iter() {
+                    let index = net_infos.read().unwrap().iter().position(|x| x.read().unwrap().id == *id);
+                    if let Some(index) = index {
+                        net_infos.write().unwrap().remove(index);
+                    }
+                }
+            }
         }
     }
 }
@@ -113,6 +107,7 @@ fn client_disconnected(player_id: i64, game_state: &Arc<Mutex<GameState>>) {
 /// 
 fn send_ping_message(net_info: &Arc<RwLock<NetworkInfo>>, time_elapsed: Duration) -> Option<bool> {
     if time_elapsed.as_secs() > 15 {
+        println!("Sending ping to client {:?}", net_info.read().unwrap().id);
         match send_message(&mut net_info.write().unwrap(), &json!({"kind": "ping"})) {
             Ok(_) => Some(true),
             Err(_) => Some(false)
@@ -186,7 +181,7 @@ pub(crate) fn handle_client(
     //TODO handle false case for failure to connect
     let _ = client_initialize(&net_info, &game_state, &tx);
     let mut keepalive = Instant::now();
-    let player_id = net_info.read().unwrap().id;
+    let player_id = net_info.read().unwrap().id.clone();
 
     //Start of the main loop to read messages and send keepalive pings
     //TODO ideally this would be done async or something cleaner
@@ -196,14 +191,11 @@ pub(crate) fn handle_client(
             keepalive = Instant::now();
         }
 
+
         match send_ping_message(&net_info, Instant::now().duration_since(keepalive)) {
             Some(false) => {
                 client_disconnected(player_id, &game_state);
-                let gs = game_state.lock().unwrap();
-                //TODO Remove from NetInfos and send message to all clients
-                let _ = tx.send(json!(DisconnectMessage::new(player_id)));
-                let _ = tx.send(json!(GameStateUpdate::new(gs.clone())));
-                break;
+                return
             },
             Some(true) => keepalive = Instant::now(),
             None => {},

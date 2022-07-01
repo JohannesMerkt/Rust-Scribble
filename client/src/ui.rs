@@ -61,9 +61,16 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
 
         if ui.button("Disconnect").clicked() {
             network_plugin::send_disconnect(networkstate);
-            clientstate.game_state.in_game = false;
+            networkstate.info = None;
         }
     });
+
+    if networkstate.info.is_none() {
+        return;
+    }
+    let net_info = networkstate.info.as_ref().unwrap();
+    let is_drawer = clientstate.game_state.players.iter().find(|player| player.id == net_info.id).unwrap().drawing;
+
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         // The central panel the region left after adding TopPanel's and SidePanel's
         ui.horizontal(|ui| {
@@ -101,23 +108,24 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
                 });
             }
 
-            let current_line = clientstate.lines.last_mut().unwrap();
+            if is_drawer {
+                let current_line = clientstate.lines.last_mut().unwrap();
 
-            if let Some(pointer_pos) = response.interact_pointer_pos() {
-                let canvas_pos = from_screen * pointer_pos;
-                if current_line.positions.last() != Some(&canvas_pos) {
-                    current_line.positions.push(canvas_pos);
+                if let Some(pointer_pos) = response.interact_pointer_pos() {
+                    let canvas_pos = from_screen * pointer_pos;
+                    if current_line.positions.last() != Some(&canvas_pos) {
+                        current_line.positions.push(canvas_pos);
+                        response.mark_changed();
+                    }
+                } else if !current_line.positions.is_empty() {
+                    network_plugin::send_line(networkstate, current_line);
+                    let width = clientstate.stroke.width;
+                    let color = clientstate.stroke.color;
+                    let new_line = Line { positions: vec![], stroke: egui::Stroke::new(width, color)};
+                    clientstate.lines.push(new_line);
                     response.mark_changed();
                 }
-            } else if !current_line.positions.is_empty() {
-                network_plugin::send_line(networkstate, current_line);
-                let width = clientstate.stroke.width;
-                let color = clientstate.stroke.color;
-                let new_line = Line { positions: vec![], stroke: egui::Stroke::new(width, color)};
-                clientstate.lines.push(new_line);
-                response.mark_changed();
             }
-
             let mut shapes = vec![];
             for line in &clientstate.lines {
                 if line.positions.len() >= 2 {
@@ -126,7 +134,6 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
                 }
             }
             painter.extend(shapes);
-
             response
         });
     });

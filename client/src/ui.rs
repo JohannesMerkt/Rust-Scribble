@@ -61,14 +61,12 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
 
         if ui.button("Disconnect").clicked() {
             network_plugin::send_disconnect(networkstate);
-            networkstate.info = None;
+            //TODO change back to main screen
         }
     });
 
-    if networkstate.info.is_none() {
-        return;
-    }
     let net_info = networkstate.info.as_ref().unwrap();
+    //This is dangerous at the moment Thread Panic!
     let is_drawer = clientstate.game_state.players.iter().find(|player| player.id == net_info.id).unwrap().drawing;
 
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {

@@ -1,5 +1,6 @@
 FROM rust:1.62.0 as builder
-RUN apt-get install -y pkg-config
+RUN apt-get install -y libasound2-dev portaudio19-dev build-essential libpulse-dev libdbus-1-dev 
+RUN apt-get install -y libsdl2-dev
 WORKDIR /app
 COPY ./ ./
 WORKDIR /app/server

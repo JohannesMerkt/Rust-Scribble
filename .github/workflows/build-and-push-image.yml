@@ -17,10 +17,10 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
 
-#    - name: Set Swap Space
-#      uses: pierotofy/set-swap-space@master
-#      with:
-#        swap-size-gb: 10
+    - name: Set Swap Space
+      uses: pierotofy/set-swap-space@master
+      with:
+        swap-size-gb: 10
       
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v2

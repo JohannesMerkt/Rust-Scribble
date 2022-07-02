@@ -1,6 +1,6 @@
 FROM rust:1.62.0-slim-buster as builder
 WORKDIR /app
-COPY ../ ./
+COPY ./ ./
 WORKDIR /app/server
 RUN cargo build --release
 

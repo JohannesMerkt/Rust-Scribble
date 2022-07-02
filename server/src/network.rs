@@ -1,7 +1,8 @@
 use chacha20poly1305::Key;
-use rust_scribble_common::messages_common::{DisconnectMessage, GameStateUpdate};
+use rust_scribble_common::messages_common::{GameStateUpdate, DisconnectMessage};
 use serde_json::json;
 use std::io::{BufRead, BufReader, Read};
+use std::net::Shutdown;
 use std::sync::{Arc, Mutex, mpsc, RwLock};
 use std::time::{Duration, Instant};
 use x25519_dalek::PublicKey;
@@ -38,6 +39,7 @@ fn handle_message(
         client_disconnected(player_id, &game_state);
         let game_state = game_state.lock().unwrap();
         let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
+        let _ = tx.send(msg);
     }
 }
 
@@ -58,23 +60,31 @@ pub(crate) fn check_send_broadcast_messages(
     loop {
         if let Ok(msg) = rx.recv() {
 
-            net_infos.write().unwrap().iter_mut().for_each(|net_info| {
-                let mut net_info = net_info.write().unwrap();
-                match send_message(&mut net_info, &msg) {
-                    Ok(_) => {}
-                    Err(_) => {
-                        remove_clients.lock().unwrap().push(net_info.id);
+            if msg["kind"].eq("disconnect") {
+                let mut remove_clients = remove_clients.lock().unwrap();
+                remove_clients.push(msg["player_id"].as_i64().unwrap());
+            } else {
+
+                net_infos.write().unwrap().iter_mut().for_each(|net_info| {
+                    let mut net_info = net_info.write().unwrap();
+                    match send_message(&mut net_info, &msg) {
+                        Ok(_) => {}
+                        Err(_) => {
+                            remove_clients.lock().unwrap().push(net_info.id);
+                        }
                     }
-                }
-            });
+                });
+            }
 
             if remove_clients.lock().unwrap().len() > 0 {
+                println!("Removing clients: {:?}", remove_clients.lock().unwrap());
                 for id in remove_clients.lock().unwrap().iter() {
                     let index = net_infos.read().unwrap().iter().position(|x| x.read().unwrap().id == *id);
                     if let Some(index) = index {
                         net_infos.write().unwrap().remove(index);
                     }
                 }
+                remove_clients.lock().unwrap().clear();
             }
         }
     }
@@ -195,6 +205,7 @@ pub(crate) fn handle_client(
         match send_ping_message(&net_info, Instant::now().duration_since(keepalive)) {
             Some(false) => {
                 client_disconnected(player_id, &game_state);
+                let _ = tx.send(json!(DisconnectMessage::new(player_id)));
                 return
             },
             Some(true) => keepalive = Instant::now(),

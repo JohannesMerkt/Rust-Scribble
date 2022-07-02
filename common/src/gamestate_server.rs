@@ -12,10 +12,12 @@ impl GameState {
     pub fn remove_player(&mut self, player_id: i64) {
         // leave ingame when player is drawer
         if self.in_game {
-            let player = self.players.par_iter().find_any(|&player| player.id == player_id).unwrap();
-            if player.drawing {
-                self.end_game();
+            if let Some(player) = self.players.par_iter().find_any(|&player| player.id == player_id) {
+                if player.drawing {
+                    self.end_game();
+                }
             }
+           
         }
         self.players.retain(|player| player.id != player_id);
         // leave ingame when only 1 player

@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scribble-server-deployment
+  labels:
+    app: scribble-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scribble-server
+  template:
+    metadata:
+      labels:
+        app: scribble-server
+    spec:
+      containers:
+      - name: scribble-server
+        image: ghcr.io/JohannesMerkt/Rust-Scribble:1.0.0
+        ports:
+        - containerPort: 3000
+      imagePullSecrets:
+      - name: dockerconfigjson-github-com
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scribble-server-service
+spec:
+  type: NodePort # external access
+  selector:
+    app: scribble-server
+  ports:
+    - protocol: TCP
+      port: 3000 # service port
+      targetPort: 3000
+      nodePort: 30002

@@ -47,5 +47,5 @@ jobs:
         context: server
         platforms: linux/arm64
         push: true
-        tags: ${{ steps.meta.output.tags }}
+        tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}

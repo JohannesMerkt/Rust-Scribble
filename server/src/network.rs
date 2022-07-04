@@ -2,13 +2,27 @@ use chacha20poly1305::Key;
 use rust_scribble_common::messages_common::{GameStateUpdate, DisconnectMessage};
 use serde_json::json;
 use std::io::{BufRead, BufReader, Read};
-use std::net::Shutdown;
 use std::sync::{Arc, Mutex, mpsc, RwLock};
 use std::time::{Duration, Instant};
 use x25519_dalek::PublicKey;
-use rayon::prelude::*;
 use rust_scribble_common::network_common::*;
 use rust_scribble_common::gamestate_common::*;
+
+pub struct ServerState {
+    pub game_state: Arc<Mutex<GameState>>,
+    pub net_infos: Arc<RwLock<Vec<Arc<RwLock<NetworkInfo>>>>>,
+    pub word_list: Arc<Mutex<Vec<String>>>,
+}
+
+impl ServerState {
+    pub fn default(words: Vec<String>) -> Self {
+        ServerState {
+            game_state:  Arc::new(Mutex::new(GameState::default())),
+            net_infos: Arc::new(RwLock::new(Vec::new())),
+            word_list: Arc::new(Mutex::new(words)),
+        }
+    }
+}
 
 /// Handles a client message.
 /// 
@@ -37,9 +51,9 @@ fn handle_message(
         let _ = tx.send(msg);
     } else if msg["kind"].eq("disconnect") {
         client_disconnected(player_id, &game_state);
+        let _ = tx.send(msg);
         let game_state = game_state.lock().unwrap();
         let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
-        let _ = tx.send(msg);
     }
 }
 
@@ -51,11 +65,12 @@ fn handle_message(
 /// * `rx` - The channel to receive broadcast messages from.
 /// 
 pub(crate) fn check_send_broadcast_messages(
-    net_infos: &Arc<RwLock<Vec<Arc<RwLock<NetworkInfo>>>>>,
+    server_state: Arc<ServerState>,
     rx: mpsc::Receiver<serde_json::Value>,
 ) {
     //TODO remove disconnected clients from net_infos
     let remove_clients: Arc<Mutex<Vec<i64>>> = Arc::new(Mutex::new(Vec::new()));
+    let net_infos = server_state.net_infos.clone();
 
     loop {
         if let Ok(msg) = rx.recv() {
@@ -77,7 +92,6 @@ pub(crate) fn check_send_broadcast_messages(
             }
 
             if remove_clients.lock().unwrap().len() > 0 {
-                println!("Removing clients: {:?}", remove_clients.lock().unwrap());
                 for id in remove_clients.lock().unwrap().iter() {
                     let index = net_infos.read().unwrap().iter().position(|x| x.read().unwrap().id == *id);
                     if let Some(index) = index {
@@ -206,6 +220,8 @@ pub(crate) fn handle_client(
             Some(false) => {
                 client_disconnected(player_id, &game_state);
                 let _ = tx.send(json!(DisconnectMessage::new(player_id)));
+                let game_state = game_state.lock().unwrap();
+                let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
                 return
             },
             Some(true) => keepalive = Instant::now(),

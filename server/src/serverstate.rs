@@ -47,7 +47,7 @@ impl ServerState {
         }
     }
 
-    pub fn set_ready(&mut self, player_id: i64, status: bool) {
+    pub fn set_ready(&mut self, player_id: i64, status: bool) -> bool{
         let mut all_ready = true;
         {
             let mut game_state = self.game_state.lock().unwrap();
@@ -63,9 +63,7 @@ impl ServerState {
                 }
             }
         }
-        if all_ready {
-                self.start_game();
-        }
+        all_ready
     }
 
     pub fn chat_or_guess(&mut self, player_id: i64, message: &String) -> bool {
@@ -105,12 +103,12 @@ impl ServerState {
         words.remove(word_index);
     }
 
-    fn start_game(&mut self) {
+    pub fn start_game(&mut self) {
         self.get_random_word();
         let mut game_state = self.game_state.lock().unwrap();
         game_state.in_game = true;
         game_state.time = 500;
-        let drawer_id = rand::thread_rng().gen_range(1, game_state.players.len()) as i64;
+        let drawer_id = rand::thread_rng().gen_range(1, game_state.players.len()+1) as i64;
         for player in &mut game_state.players.iter_mut() {
             if drawer_id == player.id {
                 player.drawing = true;

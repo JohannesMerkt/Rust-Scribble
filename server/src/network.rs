@@ -33,7 +33,9 @@ fn handle_message(
     } else if msg["kind"].eq("ready") {
         let id = msg["id"].as_i64().unwrap();
         let status = msg["ready"].as_bool().unwrap();
-        server_state.set_ready(id, status)
+        if server_state.set_ready(id, status) {
+            server_state.start_game();
+        }
     } else if msg["kind"].eq("chat_message") {
         server_state.chat_or_guess(msg["id"].as_i64().unwrap(), &msg["message"].as_str().unwrap().to_string());
         msg_to_send.push(msg);
@@ -89,15 +91,17 @@ pub(crate) fn check_send_broadcast_messages(
                 }
             }
 
-            let net_infos = server_state.lock().unwrap().net_infos.clone();
-            if remove_clients.lock().unwrap().len() > 0 {
-                for id in remove_clients.lock().unwrap().iter() {
-                    let index = net_infos.read().unwrap().iter().position(|x| x.read().unwrap().id == *id);
-                    if let Some(index) = index {
-                        net_infos.write().unwrap().remove(index);
+            {
+                let net_infos = server_state.lock().unwrap().net_infos.clone();
+                if remove_clients.lock().unwrap().len() > 0 {
+                    for id in remove_clients.lock().unwrap().iter() {
+                        let index = net_infos.read().unwrap().iter().position(|x| x.read().unwrap().id == *id);
+                        if let Some(index) = index {
+                            net_infos.write().unwrap().remove(index);
+                        }
                     }
+                    remove_clients.lock().unwrap().clear();
                 }
-                remove_clients.lock().unwrap().clear();
             }
         }
     }

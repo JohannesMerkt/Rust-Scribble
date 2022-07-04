@@ -1,13 +1,14 @@
 #![crate_name = "rust_scribble_server"]
 mod network;
+mod serverstate;
 
-use std::{sync::{Arc, mpsc, RwLock}, net::{Ipv4Addr, SocketAddrV4, TcpListener}, io::{Write, BufReader, BufRead}, thread, path::Path, fs::File};
+use std::{sync::{Arc, mpsc, RwLock, Mutex}, net::{Ipv4Addr, SocketAddrV4, TcpListener}, io::{Write, BufReader, BufRead}, thread, path::Path, fs::File};
 use chacha20poly1305::Key;
 use clap::Parser;
 use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
-use network::handle_client;
+use crate::network::handle_client;
+use crate::serverstate::ServerState;
 
-use crate::network::ServerState;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -53,7 +54,7 @@ pub fn tcp_server(port: u16, words: Vec<String>) {
     let (tx, rx) = mpsc::channel();
     let mut next_client_id: i64 = 1;
 
-    let server_state = Arc::new(ServerState::default(words));
+    let server_state = Arc::new(Mutex::new(ServerState::default(words)));
     //Add words to server state
     let broadcast_server = Arc::clone(&server_state);
 
@@ -78,14 +79,11 @@ pub fn tcp_server(port: u16, words: Vec<String>) {
                         });
 
                         let arc_net_info = Arc::new(net_info);
-                        let thread_gs = Arc::clone(&server_state.game_state);
                         let thread_net_info = Arc::clone(&arc_net_info);
                         let thread_tx = tx.clone();
-                        server_state.net_infos.write().unwrap().push(arc_net_info);
+                        server_state.lock().unwrap().net_infos.write().unwrap().push(arc_net_info);
 
-                        thread::spawn(move || {
-                            handle_client(thread_net_info, thread_gs, thread_tx);
-                        });
+                        thread::spawn(move || {handle_client(thread_net_info, thread_tx);});
                         next_client_id += 1;
                     }
                     Err(_e) => println!("Error sending id"),

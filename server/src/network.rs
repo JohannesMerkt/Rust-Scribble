@@ -1,28 +1,13 @@
 use chacha20poly1305::Key;
 use rust_scribble_common::messages_common::{GameStateUpdate, DisconnectMessage};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read};
 use std::sync::{Arc, Mutex, mpsc, RwLock};
 use std::time::{Duration, Instant};
 use x25519_dalek::PublicKey;
 use rust_scribble_common::network_common::*;
-use rust_scribble_common::gamestate_common::*;
 
-pub struct ServerState {
-    pub game_state: Arc<Mutex<GameState>>,
-    pub net_infos: Arc<RwLock<Vec<Arc<RwLock<NetworkInfo>>>>>,
-    pub word_list: Arc<Mutex<Vec<String>>>,
-}
-
-impl ServerState {
-    pub fn default(words: Vec<String>) -> Self {
-        ServerState {
-            game_state:  Arc::new(Mutex::new(GameState::default())),
-            net_infos: Arc::new(RwLock::new(Vec::new())),
-            word_list: Arc::new(Mutex::new(words)),
-        }
-    }
-}
+use crate::serverstate::ServerState;
 
 /// Handles a client message.
 /// 
@@ -34,29 +19,37 @@ impl ServerState {
 /// 
 fn handle_message(
     msg: serde_json::Value,
-    player_id: i64,
-    game_state: &Arc<Mutex<GameState>>,
-    tx: &mpsc::Sender<serde_json::Value>,
-) {
+    server_state: &mut ServerState,
+) -> Vec<Value> {
+
     println!("RCV: {:?}", msg);
+    let mut msg_to_send:Vec<Value> = vec![];
 
     //TODO create message structs and remove unpack and repacking
-    if msg["kind"].eq("chat_message") {
-        let mut game_state = game_state.lock().unwrap();
-        game_state.chat_or_guess(player_id, &msg["message"].as_str().unwrap().to_string());
-        let  _ = tx.send(msg);
+    if msg["kind"].eq("user_init") {
+        let id = msg["id"].as_i64().unwrap();
+        let name = msg["username"].as_str().unwrap();
+        server_state.add_player(id, name.to_string());
     } else if msg["kind"].eq("ready") {
-        let mut game_state = game_state.lock().unwrap();
-        game_state.set_ready(player_id, msg["ready"].as_bool().unwrap());
+        let id = msg["id"].as_i64().unwrap();
+        let status = msg["ready"].as_bool().unwrap();
+        server_state.set_ready(id, status)
+    } else if msg["kind"].eq("chat_message") {
+        server_state.chat_or_guess(msg["id"].as_i64().unwrap(), &msg["message"].as_str().unwrap().to_string());
+        msg_to_send.push(msg);
     } else if msg["kind"].eq("add_line") {
-        let _ = tx.send(msg);
+        msg_to_send.push(msg);
     } else if msg["kind"].eq("disconnect") {
-        client_disconnected(player_id, &game_state);
-        let _ = tx.send(msg);
+        let id = msg["id"].as_i64().unwrap();
+        server_state.remove_player(id);
+        msg_to_send.push(msg);
+    } else {
+        msg_to_send.push(msg);
     }
 
-    let game_state = game_state.lock().unwrap();
-    let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
+    msg_to_send.push(json!(GameStateUpdate::new(0, server_state.game_state.lock().unwrap().clone())));
+
+    msg_to_send
 }
 
 /// Loop listening for waiting on MPSC channel and handle sending broadcast messages
@@ -67,32 +60,36 @@ fn handle_message(
 /// * `rx` - The channel to receive broadcast messages from.
 /// 
 pub(crate) fn check_send_broadcast_messages(
-    server_state: Arc<ServerState>,
+    server_state: Arc<Mutex<ServerState>>,
     rx: mpsc::Receiver<serde_json::Value>,
 ) {
     //TODO remove disconnected clients from net_infos
     let remove_clients: Arc<Mutex<Vec<i64>>> = Arc::new(Mutex::new(Vec::new()));
-    let net_infos = server_state.net_infos.clone();
 
     loop {
         if let Ok(msg) = rx.recv() {
 
-            if msg["kind"].eq("disconnect") {
-                let mut remove_clients = remove_clients.lock().unwrap();
-                remove_clients.push(msg["player_id"].as_i64().unwrap());
-            } else {
+            let msgs_to_send = handle_message(msg, &mut server_state.lock().unwrap());
 
-                net_infos.write().unwrap().iter_mut().for_each(|net_info| {
-                    let mut net_info = net_info.write().unwrap();
-                    match send_message(&mut net_info, &msg) {
-                        Ok(_) => {}
-                        Err(_) => {
-                            remove_clients.lock().unwrap().push(net_info.id);
+            for msg in msgs_to_send.iter() {
+                if msg["kind"].eq("disconnect") {
+                    let mut remove_clients = remove_clients.lock().unwrap();
+                    remove_clients.push(msg["player_id"].as_i64().unwrap().clone());
+                } else {
+                    let net_infos = server_state.lock().unwrap().net_infos.clone();
+                    net_infos.write().unwrap().iter_mut().for_each(|net_info| {
+                        let mut net_info = net_info.write().unwrap();
+                        match send_message(&mut net_info, &msg) {
+                            Ok(_) => {}
+                            Err(_) => {
+                                remove_clients.lock().unwrap().push(net_info.id);
+                            }
                         }
-                    }
-                });
+                    });
+                }
             }
 
+            let net_infos = server_state.lock().unwrap().net_infos.clone();
             if remove_clients.lock().unwrap().len() > 0 {
                 for id in remove_clients.lock().unwrap().iter() {
                     let index = net_infos.read().unwrap().iter().position(|x| x.read().unwrap().id == *id);
@@ -106,20 +103,6 @@ pub(crate) fn check_send_broadcast_messages(
     }
 }
 
-
-
-/// Removes a disconnected client from the lobby, gamestate and closes the tcp_stream.
-/// 
-/// # Arguments
-/// * `net_info` - The network information of the client.
-/// * `game_state` - The current game_state.
-/// * `lobby` - The lobby state.
-/// 
-fn client_disconnected(player_id: i64, game_state: &Arc<Mutex<GameState>>) {
-    println!("Client {:?} disconnected", player_id);
-    let mut game_state = game_state.lock().unwrap();
-    game_state.remove_player(player_id);
-}
 
 /// Send a JSON message to check if the client is still connected.
 /// 
@@ -154,9 +137,8 @@ fn send_ping_message(net_info: &Arc<RwLock<NetworkInfo>>, time_elapsed: Duration
 /// 
 fn client_initialize(
     net_info: &Arc<RwLock<NetworkInfo>>,
-    game_state: &Arc<Mutex<GameState>>,
     tx: &mpsc::Sender<serde_json::Value>,
-) -> bool {
+) {
     let mut net_info = net_info.write().unwrap();
     let _ = net_info
         .tcp_stream
@@ -176,14 +158,7 @@ fn client_initialize(
     let shared_secret = net_info.secret_key.as_ref().unwrap().diffie_hellman(&client_public);
     net_info.key = *Key::from_slice(shared_secret.as_bytes());
 
-    {
-        let mut game_state = game_state.lock().unwrap();
-        game_state.add_player(net_info.id, username);
-        // broadcast all players in lobby when players join
-        let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
-    }
-
-    true
+    let _ = tx.send(json!({"kind": "user_init", "id": net_info.id , "username": username}));
 }
 
 /// The Main loop to handle each individual clients
@@ -200,11 +175,10 @@ fn client_initialize(
 /// 
 pub(crate) fn handle_client(
     net_info: Arc<RwLock<NetworkInfo>>,
-    game_state: Arc<Mutex<GameState>>,
     tx: mpsc::Sender<serde_json::Value>,
 ) {
-    //TODO handle false case for failure to connect
-    let _ = client_initialize(&net_info, &game_state, &tx);
+
+    client_initialize(&net_info, &tx);
     let mut keepalive = Instant::now();
     let player_id = net_info.read().unwrap().id.clone();
 
@@ -212,17 +186,13 @@ pub(crate) fn handle_client(
     //TODO ideally this would be done async or something cleaner
     loop {
         if let Ok(msg) = read_tcp_message(&mut net_info.write().unwrap()) {
-            handle_message(msg, player_id, &game_state, &tx);
+            let _ = tx.send(msg);
             keepalive = Instant::now();
         }
 
-
         match send_ping_message(&net_info, Instant::now().duration_since(keepalive)) {
             Some(false) => {
-                client_disconnected(player_id, &game_state);
                 let _ = tx.send(json!(DisconnectMessage::new(player_id)));
-                let game_state = game_state.lock().unwrap();
-                let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
                 return
             },
             Some(true) => keepalive = Instant::now(),

@@ -27,6 +27,20 @@ pub struct Player {
     pub guessed_word: bool,
 }
 
+impl Player {
+    pub fn new(id: i64, name: String) -> Self {
+        Player {
+            id,
+            name,
+            score: 0,
+            ready: false,
+            drawing: false,
+            playing: false,
+            guessed_word: false,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct GameState {
     /// are we in lobby or ingame?

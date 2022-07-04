@@ -147,7 +147,7 @@ fn render_chat_area(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin:
         100,
         |ui, _| {
             for chat_message in clientstate.chat_messages.iter() {
-                let search_player_result = clientstate.game_state.players.par_iter().find_any(|player| player.id == chat_message.player_id);
+                let search_player_result = clientstate.game_state.players.par_iter().find_any(|player| player.id == chat_message.id);
                 if let Some(player) = search_player_result {
                     ui.label(format!("{}: {}",player.name, chat_message.message));
                     ui.set_min_width(100.0);

@@ -67,7 +67,7 @@ pub fn send_disconnect(networkstate: &mut ResMut<NetworkState>) {
 
 pub fn send_line(networkstate: &mut ResMut<NetworkState>, line: &mut Line) {
     if let Some(network_info) = networkstate.info.as_mut() {
-        let msg = json!(PaintingUpdate::new(line.clone()));
+        let msg = json!(PaintingUpdate::new(network_info.id, line.clone()));
         let _ = send_message(network_info, &msg);
     }
 }
@@ -87,7 +87,7 @@ fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut net
 
                         if m["kind"].eq("chat_message") {
                             let message = m["message"].as_str().unwrap();
-                            let player_id = m["player_id"].as_i64().unwrap();
+                            let player_id = m["id"].as_i64().unwrap();
                             let chat_message = ChatMessage::new(player_id, message.to_string());
                             clientstate.chat_messages.push(chat_message);
                         } else if m["kind"].eq("update") { 

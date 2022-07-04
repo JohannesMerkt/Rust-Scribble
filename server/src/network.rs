@@ -42,19 +42,21 @@ fn handle_message(
 
     //TODO create message structs and remove unpack and repacking
     if msg["kind"].eq("chat_message") {
+        let mut game_state = game_state.lock().unwrap();
+        game_state.chat_or_guess(player_id, &msg["message"].as_str().unwrap().to_string());
         let  _ = tx.send(msg);
     } else if msg["kind"].eq("ready") {
         let mut game_state = game_state.lock().unwrap();
         game_state.set_ready(player_id, msg["ready"].as_bool().unwrap());
-        let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
     } else if msg["kind"].eq("add_line") {
         let _ = tx.send(msg);
     } else if msg["kind"].eq("disconnect") {
         client_disconnected(player_id, &game_state);
         let _ = tx.send(msg);
-        let game_state = game_state.lock().unwrap();
-        let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
     }
+
+    let game_state = game_state.lock().unwrap();
+    let _ = tx.send(json!(GameStateUpdate::new(game_state.clone())));
 }
 
 /// Loop listening for waiting on MPSC channel and handle sending broadcast messages
@@ -131,7 +133,6 @@ fn client_disconnected(player_id: i64, game_state: &Arc<Mutex<GameState>>) {
 /// 
 fn send_ping_message(net_info: &Arc<RwLock<NetworkInfo>>, time_elapsed: Duration) -> Option<bool> {
     if time_elapsed.as_secs() > 15 {
-        println!("Sending ping to client {:?}", net_info.read().unwrap().id);
         match send_message(&mut net_info.write().unwrap(), &json!({"kind": "ping"})) {
             Ok(_) => Some(true),
             Err(_) => Some(false)

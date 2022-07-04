@@ -74,7 +74,7 @@ pub(crate) fn check_send_broadcast_messages(
             for msg in msgs_to_send.iter() {
                 if msg["kind"].eq("disconnect") {
                     let mut remove_clients = remove_clients.lock().unwrap();
-                    remove_clients.push(msg["player_id"].as_i64().unwrap().clone());
+                    remove_clients.push(msg["id"].as_i64().unwrap());
                 } else {
                     let net_infos = server_state.lock().unwrap().net_infos.clone();
                     net_infos.write().unwrap().iter_mut().for_each(|net_info| {

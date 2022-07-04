@@ -84,12 +84,14 @@ impl ServerState {
                         all_guessed &= player.guessed_word;
                     }
                 }
+            } else {
+                all_guessed = false;
             }
         }
         if all_guessed {
             self.end_game();
         }
-        
+
         all_guessed
     }
 

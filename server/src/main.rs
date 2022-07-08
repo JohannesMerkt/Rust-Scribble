@@ -81,7 +81,7 @@ pub fn tcp_server(port: u16, words: Vec<String>) {
                         let arc_net_info = Arc::new(net_info);
                         let thread_net_info = Arc::clone(&arc_net_info);
                         let thread_tx = tx.clone();
-                        server_state.lock().unwrap().net_infos.write().unwrap().push(arc_net_info);
+                        server_state.lock().unwrap().net_infos().write().unwrap().push(arc_net_info);
 
                         thread::spawn(move || {handle_client(thread_net_info, thread_tx);});
                         next_client_id += 1;

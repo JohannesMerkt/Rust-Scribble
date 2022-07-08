@@ -9,6 +9,8 @@ use rust_scribble_common::network_common::*;
 
 use crate::serverstate::ServerState;
 
+const DELAY_BEFORE_GAME_START: u64 = 5;
+
 /// Handles a client message.
 /// 
 /// # Arguments
@@ -34,7 +36,7 @@ fn handle_message(
         let id = msg["id"].as_i64().unwrap();
         let status = msg["ready"].as_bool().unwrap();
         if server_state.set_ready(id, status) {
-            server_state.start_game();
+            server_state.start_game_on_timer(DELAY_BEFORE_GAME_START);
         }
     } else if msg["kind"].eq("chat_message") {
         server_state.chat_or_guess(msg["id"].as_i64().unwrap(), &msg["message"].as_str().unwrap().to_string());
@@ -49,7 +51,7 @@ fn handle_message(
         msg_to_send.push(msg);
     }
 
-    msg_to_send.push(json!(GameStateUpdate::new(0, server_state.game_state.lock().unwrap().clone())));
+    msg_to_send.push(json!(GameStateUpdate::new(0, server_state.game_state().lock().unwrap().clone())));
 
     msg_to_send
 }
@@ -78,7 +80,7 @@ pub(crate) fn check_send_broadcast_messages(
                     let mut remove_clients = remove_clients.lock().unwrap();
                     remove_clients.push(msg["id"].as_i64().unwrap());
                 } else {
-                    let net_infos = server_state.lock().unwrap().net_infos.clone();
+                    let net_infos = server_state.lock().unwrap().net_infos();
                     net_infos.write().unwrap().iter_mut().for_each(|net_info| {
                         let mut net_info = net_info.write().unwrap();
                         match send_message(&mut net_info, &msg) {
@@ -92,7 +94,7 @@ pub(crate) fn check_send_broadcast_messages(
             }
 
             {
-                let net_infos = server_state.lock().unwrap().net_infos.clone();
+                let net_infos = server_state.lock().unwrap().net_infos();
                 if remove_clients.lock().unwrap().len() > 0 {
                     for id in remove_clients.lock().unwrap().iter() {
                         let index = net_infos.read().unwrap().iter().position(|x| x.read().unwrap().id == *id);

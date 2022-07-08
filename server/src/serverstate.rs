@@ -53,7 +53,9 @@ impl ServerState {
             pub fn remove_player(&mut self, player_id: i64);
             pub fn set_ready(&mut self, player_id: i64, status: bool) -> bool;
             pub fn chat_or_guess(&mut self, player_id: i64, message: &String) -> bool;
-            pub fn start_game(&mut self);
+            // start_game should not be accessible directly to keep the interface clean.
+            // A countdown of 0 seconds can be used to start immediately
+            // but the game is usually started with some small countdown instead
         }
     }
 

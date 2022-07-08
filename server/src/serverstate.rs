@@ -13,13 +13,13 @@ pub struct ServerState {
 impl ServerState {
     pub fn default(words: Vec<String>) -> Self {
         ServerState {
-            game_state:  Arc::new(Mutex::new(GameState::default())),
+            game_state: Arc::new(Mutex::new(GameState::default())),
             net_infos: Arc::new(RwLock::new(Vec::new())),
             word_list: Arc::new(Mutex::new(words)),
         }
     }
 
-     pub fn add_player(&mut self, id: i64, name: String) {
+    pub fn add_player(&mut self, id: i64, name: String) {
         self.game_state.lock().unwrap().players.push(Player::new(id, name));
     }
 
@@ -47,23 +47,19 @@ impl ServerState {
         }
     }
 
-    pub fn set_ready(&mut self, player_id: i64, status: bool) -> bool{
-        let mut all_ready = true;
-        {
-            let mut game_state = self.game_state.lock().unwrap();
-            for player in game_state.players.iter_mut() {
-                if player.id == player_id {
-                    player.ready = status;
-                }
-            }
-            // check if all are ready to start and enough players
-            if !game_state.in_game && game_state.players.len() > 1 {
-                for player in &mut game_state.players.iter() {
-                    all_ready &= player.ready;
-                }
+    pub fn set_ready(&mut self, player_id: i64, status: bool) -> bool {
+        let mut game_state = self.game_state.lock().unwrap();
+        for player in game_state.players.iter_mut() {
+            if player.id == player_id {
+                player.ready = status;
             }
         }
-        all_ready
+        // check if all are ready to start and enough players
+        if !game_state.in_game && game_state.players.len() > 1 {
+            game_state.players.iter().all(|player| player.ready)
+        } else {
+            false
+        }
     }
 
     pub fn chat_or_guess(&mut self, player_id: i64, message: &String) -> bool {
@@ -93,7 +89,7 @@ impl ServerState {
         all_guessed
     }
 
-    fn get_random_word(&mut self) { 
+    fn get_random_word(&mut self) {
         let mut game_state = self.game_state.lock().unwrap();
         let mut words = self.word_list.lock().unwrap();
         let word_index = rand::thread_rng().gen_range(0, words.len());
@@ -108,18 +104,16 @@ impl ServerState {
         let mut game_state = self.game_state.lock().unwrap();
         game_state.in_game = true;
         game_state.time = 500;
-        let drawer_id = rand::thread_rng().gen_range(1, game_state.players.len()+1) as i64;
+        let drawer_id = rand::thread_rng().gen_range(1, game_state.players.len() + 1) as i64;
         for player in &mut game_state.players.iter_mut() {
             if drawer_id == player.id {
                 player.drawing = true;
-            }
-            else {
+            } else {
                 player.drawing = false;
             }
             player.guessed_word = false;
             player.playing = true;
             player.ready = false;
-           
         }
     }
 
@@ -136,5 +130,4 @@ impl ServerState {
             player.drawing = false;
         }
     }
-
 }

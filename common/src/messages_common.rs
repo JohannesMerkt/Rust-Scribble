@@ -62,10 +62,10 @@ pub struct GameStateUpdate {
 }
 
 impl GameStateUpdate {
-    pub fn new(id: i64, game_state: GameState) -> Self {
+    pub fn new(game_state: GameState) -> Self {
         GameStateUpdate {
             kind: "update".to_string(),
-            id,
+            id: 0,
             game_state: json!(game_state)
         }
     }

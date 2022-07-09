@@ -66,7 +66,7 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
     });
 
     let net_info = networkstate.info.as_ref().unwrap();
-    //This is dangerous at the moment Thread Panic!
+    //TODO FIX: This is dangerous at the moment Thread Panic!
     let is_drawer = clientstate.players.iter().find(|player| player.id == net_info.id).unwrap().drawing;
 
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {

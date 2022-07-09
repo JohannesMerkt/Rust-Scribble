@@ -27,6 +27,8 @@ fn handle_message(
     println!("RCV: {:?}", msg);
     let mut msg_to_send:Vec<Value> = vec![];
 
+    let send_update = !msg["kind"].eq("update");
+
     //TODO create message structs and remove unpack and repacking
     if msg["kind"].eq("user_init") {
         let id = msg["id"].as_i64().unwrap();
@@ -41,8 +43,8 @@ fn handle_message(
         }
         msg_to_send.push(json!(PlayersUpdate::new(server_state.players().lock().unwrap().to_vec())));
     } else if msg["kind"].eq("chat_message") {
-        if !server_state.chat_or_guess(msg["id"].as_i64().unwrap(), &msg["message"].as_str().unwrap().to_string()){
-            msg_to_send.push(json!(PlayersUpdate::new(server_state.players().lock().unwrap().to_vec())));
+        if server_state.chat_or_guess(msg["id"].as_i64().unwrap(), &msg["message"].as_str().unwrap().to_string()){
+           server_state.end_game();
         }
         msg_to_send.push(msg);
     } else if msg["kind"].eq("add_line") {
@@ -56,7 +58,9 @@ fn handle_message(
         msg_to_send.push(msg);
     }
 
-    msg_to_send.push(json!(GameStateUpdate::new(0, server_state.game_state().lock().unwrap().clone())));
+    if send_update {
+        msg_to_send.push(json!(GameStateUpdate::new(server_state.game_state().lock().unwrap().clone())));
+    }
 
     msg_to_send
 }

@@ -16,16 +16,12 @@ pub struct ServerState {
     started_lock: Arc<(PLMutex<bool>, PLCondvar)>,
 }
 
-// by default only start if all players are ready
-const DEFAULT_STARTUP_TIME: u64 = u64::MAX;
-
 impl ServerState {
     pub fn default(words: Vec<String>, tx: mpsc::Sender<serde_json::Value>) -> Self {
-        let mut server_state = ServerState {
+        let server_state = ServerState {
             state: Arc::new(Mutex::new(ServerStateInner::default(words, tx))),
             started_lock: Arc::new((PLMutex::new(false), PLCondvar::new())),
         };
-        server_state.start_game_on_timer(DEFAULT_STARTUP_TIME);
         server_state
     }
 
@@ -44,12 +40,16 @@ impl ServerState {
             if !(*started) {
                 local_state.lock().unwrap().start_game();
                 *started = true;
-                let _ = tx.send(json!(GameStateUpdate::new(0, local_state.lock().unwrap().game_state.lock().unwrap().clone()))).unwrap();
+                let _ = tx.send(json!(GameStateUpdate::new(local_state.lock().unwrap().game_state.lock().unwrap().clone()))).unwrap();
                 let _ = tx.send(json!(PlayersUpdate::new(local_state.lock().unwrap().players.lock().unwrap().to_vec())));
             } // if already true, another startup thread has started the game already
             cvar.notify_all(); // other startup threads are notified and will terminate as started is already set to true
             println!("Debug: Startup Thread with {} secs terminated (early)", secs)
         });
+    }
+
+    pub fn end_game(&mut self) {
+        *self.started_lock.0.lock() = false;
     }
 
     delegate! {

@@ -45,8 +45,6 @@ impl Player {
 pub struct GameState {
     /// are we in lobby or ingame?
     pub in_game: bool,
-    /// all players in the lobby
-    pub players: Vec<Player>,
     /// the word that has to be drawn (only visible to drawer)
     pub word: String,
     /// The length of the word
@@ -59,7 +57,6 @@ impl GameState {
     pub fn default() -> GameState {
         GameState {
             in_game: false,
-            players: Vec::new(),
             word: "".to_string(),
             word_length: 0,
             time: 0

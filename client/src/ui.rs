@@ -40,7 +40,7 @@ fn render_lobby_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut 
         render_player_list(ui, clientstate);
 
         if let Some(net_info) = networkstate.info.as_mut() {
-            let player_result = clientstate.game_state.players.iter().find(|player| player.id == net_info.id);
+            let player_result = clientstate.players.iter().find(|player| player.id == net_info.id);
             if let Some(player) = player_result {
                 if player.ready {
                     if ui.button("Not Ready").clicked() {
@@ -67,7 +67,7 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
 
     let net_info = networkstate.info.as_ref().unwrap();
     //This is dangerous at the moment Thread Panic!
-    let is_drawer = clientstate.game_state.players.iter().find(|player| player.id == net_info.id).unwrap().drawing;
+    let is_drawer = clientstate.players.iter().find(|player| player.id == net_info.id).unwrap().drawing;
 
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         // The central panel the region left after adding TopPanel's and SidePanel's
@@ -147,7 +147,7 @@ fn render_chat_area(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin:
         100,
         |ui, _| {
             for chat_message in clientstate.chat_messages.iter() {
-                let search_player_result = clientstate.game_state.players.par_iter().find_any(|player| player.id == chat_message.id);
+                let search_player_result = clientstate.players.par_iter().find_any(|player| player.id == chat_message.id);
                 if let Some(player) = search_player_result {
                     ui.label(format!("{}: {}",player.name, chat_message.message));
                     ui.set_min_width(100.0);
@@ -169,7 +169,7 @@ fn render_chat_area(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin:
 
 fn render_player_list(ui: &mut egui::Ui, clientstate: &mut ResMut<ClientState>) {
     ui.heading("Players");
-    for player in &clientstate.game_state.players {
+    for player in &clientstate.players {
         ui.label(format!("{} - ready: {} - playing: {} - drawing: {} - guessed word: {}",player.name, player.ready, player.playing, player.drawing, player.guessed_word));
     }
 }

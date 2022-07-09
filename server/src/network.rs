@@ -1,5 +1,5 @@
 use chacha20poly1305::Key;
-use rust_scribble_common::messages_common::{GameStateUpdate, DisconnectMessage};
+use rust_scribble_common::messages_common::{GameStateUpdate, DisconnectMessage, PlayersUpdate};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read};
 use std::sync::{Arc, Mutex, mpsc, RwLock};
@@ -32,20 +32,25 @@ fn handle_message(
         let id = msg["id"].as_i64().unwrap();
         let name = msg["username"].as_str().unwrap();
         server_state.add_player(id, name.to_string());
+        msg_to_send.push(json!(PlayersUpdate::new(server_state.players().lock().unwrap().to_vec())));
     } else if msg["kind"].eq("ready") {
         let id = msg["id"].as_i64().unwrap();
         let status = msg["ready"].as_bool().unwrap();
         if server_state.set_ready(id, status) {
             server_state.start_game_on_timer(DELAY_BEFORE_GAME_START);
         }
+        msg_to_send.push(json!(PlayersUpdate::new(server_state.players().lock().unwrap().to_vec())));
     } else if msg["kind"].eq("chat_message") {
-        server_state.chat_or_guess(msg["id"].as_i64().unwrap(), &msg["message"].as_str().unwrap().to_string());
+        if !server_state.chat_or_guess(msg["id"].as_i64().unwrap(), &msg["message"].as_str().unwrap().to_string()){
+            msg_to_send.push(json!(PlayersUpdate::new(server_state.players().lock().unwrap().to_vec())));
+        }
         msg_to_send.push(msg);
     } else if msg["kind"].eq("add_line") {
         msg_to_send.push(msg);
     } else if msg["kind"].eq("disconnect") {
         let id = msg["id"].as_i64().unwrap();
         server_state.remove_player(id);
+        msg_to_send.push(json!(PlayersUpdate::new(server_state.players().lock().unwrap().to_vec())));
         msg_to_send.push(msg);
     } else {
         msg_to_send.push(msg);

@@ -94,6 +94,10 @@ fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut net
                             if let Ok(new_gs) = serde_json::from_str(&m["game_state"].to_string()) {
                                 clientstate.game_state = new_gs;
                             }
+                        } else if m["kind"].eq("player_update") { 
+                            if let Ok(new_gs) = serde_json::from_str(&m["players"].to_string()) {
+                                clientstate.players = new_gs;
+                            }
                         } else if m["kind"].eq("add_line") {
                             if let Ok(line) = serde_json::from_str(&m["line"].to_string()) {
                                 let length = clientstate.lines.len();

@@ -17,6 +17,8 @@ pub struct ClientState {
     pub chat_messages: Vec<ChatMessage>,
     /// the game state
     pub game_state: GameState,
+    /// Players in the game
+    pub players: Vec<Player>,
 
 }
 
@@ -28,6 +30,7 @@ impl Default for ClientState {
             chat_message_input: String::new(), 
             chat_messages: Vec::new(), 
             game_state: GameState::default(),
+            players: Vec::new(),
         }
     }
 }

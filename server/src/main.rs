@@ -54,7 +54,7 @@ pub fn tcp_server(port: u16, words: Vec<String>) {
     let (tx, rx) = mpsc::channel();
     let mut next_client_id: i64 = 1;
 
-    let server_state = Arc::new(Mutex::new(ServerState::default(words)));
+    let server_state = Arc::new(Mutex::new(ServerState::default(words, tx.clone())));
     //Add words to server state
     let broadcast_server = Arc::clone(&server_state);
 

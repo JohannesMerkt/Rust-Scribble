@@ -83,7 +83,7 @@ pub(crate) fn check_send_broadcast_messages(
                     let net_infos = server_state.lock().unwrap().net_infos();
                     net_infos.write().unwrap().iter_mut().for_each(|net_info| {
                         let mut net_info = net_info.write().unwrap();
-                        match send_message(&mut net_info, &msg) {
+                        match send_message(&mut net_info, msg) {
                             Ok(_) => {}
                             Err(_) => {
                                 remove_clients.lock().unwrap().push(net_info.id);
@@ -186,7 +186,7 @@ pub(crate) fn handle_client(
 
     client_initialize(&net_info, &tx);
     let mut keepalive = Instant::now();
-    let player_id = net_info.read().unwrap().id.clone();
+    let player_id = net_info.read().unwrap().id;
 
     //Start of the main loop to read messages and send keepalive pings
     //TODO ideally this would be done async or something cleaner

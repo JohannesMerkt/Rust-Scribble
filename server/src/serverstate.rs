@@ -1,5 +1,8 @@
-use std::sync::{Mutex, Arc, RwLock, Condvar};
+use std::sync::mpsc;
+use std::sync::{Mutex, Arc, RwLock};
 use parking_lot::{Mutex as PLMutex, Condvar as PLCondvar};
+use rust_scribble_common::messages_common::GameStateUpdate;
+use serde_json::json;
 use std::thread;
 use std::time::Duration;
 use rand::Rng;
@@ -17,9 +20,9 @@ pub struct ServerState {
 const DEFAULT_STARTUP_TIME: u64 = u64::MAX;
 
 impl ServerState {
-    pub fn default(words: Vec<String>) -> Self {
+    pub fn default(words: Vec<String>, tx: mpsc::Sender<serde_json::Value>) -> Self {
         let mut server_state = ServerState {
-            state: Arc::new(Mutex::new(ServerStateInner::default(words))),
+            state: Arc::new(Mutex::new(ServerStateInner::default(words, tx))),
             started_lock: Arc::new((PLMutex::new(false), PLCondvar::new())),
         };
         server_state.start_game_on_timer(DEFAULT_STARTUP_TIME);
@@ -29,6 +32,7 @@ impl ServerState {
     pub fn start_game_on_timer(&mut self, secs: u64) {
         let local_state = self.state.clone();
         let local_started = self.started_lock.clone();
+        let tx = self.tx();
 
         thread::spawn(move || {
             println!("Init startup thread with {} secs", &secs);
@@ -40,7 +44,7 @@ impl ServerState {
             if !(*started) {
                 local_state.lock().unwrap().start_game();
                 *started = true;
-                //TODO trigger game state update in server (network)
+                let _ = tx.send(json!(GameStateUpdate::new(0, local_state.lock().unwrap().game_state.lock().unwrap().clone()))).unwrap();
             } // if already true, another startup thread has started the game already
             cvar.notify_all(); // other startup threads are notified and will terminate as started is already set to true
             println!("Debug: Startup Thread with {} secs terminated (early)", secs)
@@ -69,6 +73,9 @@ impl ServerState {
     pub fn word_list(&self) -> Arc<Mutex<Vec<String>>> {
         self.state.lock().unwrap().word_list.clone()
     }
+    pub fn tx(&self) -> mpsc::Sender<serde_json::Value> {
+        self.state.lock().unwrap().tx.clone()
+    }
 }
 
 
@@ -76,14 +83,16 @@ struct ServerStateInner {
     pub game_state: Arc<Mutex<GameState>>,
     pub net_infos: Arc<RwLock<Vec<Arc<RwLock<NetworkInfo>>>>>,
     pub word_list: Arc<Mutex<Vec<String>>>,
+    pub tx: mpsc::Sender<serde_json::Value>,
 }
 
 impl ServerStateInner {
-    pub fn default(words: Vec<String>) -> Self {
+    pub fn default(words: Vec<String>, tx: mpsc::Sender<serde_json::Value>) -> Self {
         ServerStateInner {
             game_state: Arc::new(Mutex::new(GameState::default())),
             net_infos: Arc::new(RwLock::new(Vec::new())),
             word_list: Arc::new(Mutex::new(words)),
+            tx,
         }
     }
 

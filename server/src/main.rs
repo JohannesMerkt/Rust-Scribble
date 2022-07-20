@@ -2,11 +2,11 @@
 mod network;
 mod serverstate;
 
-use std::{sync::{Arc, mpsc::{self, Receiver}, RwLock, Mutex}, net::{Ipv4Addr, SocketAddrV4, TcpListener}, io::{Write, BufReader, BufRead}, thread, path::Path, fs::File};
+use std::{sync::{Arc, Mutex, mpsc}, net::{Ipv4Addr, SocketAddrV4, TcpListener}, io::{Write, BufReader, BufRead}, thread, path::Path, fs::File};
 use chacha20poly1305::Key;
 use clap::Parser;
 use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
-use crate::network::handle_client;
+use crate::{network::handle_client, serverstate::ClientSendChannel};
 use crate::serverstate::ServerState;
 
 
@@ -78,9 +78,9 @@ pub fn tcp_server(port: u16, words: Vec<String>) {
                             secret_key: Some(secret_key),
                         };
 
-                        let (stx, thread_rx) = mpsc::channel();
+                        let (client_tx, thread_rx) = ClientSendChannel::new(next_client_id);
                         let thread_tx = tx.clone();
-                        server_state.lock().unwrap().add_client_tx(stx);
+                        server_state.lock().unwrap().add_client_tx(client_tx);
 
                         thread::spawn(move || {handle_client(net_info, thread_tx, thread_rx);});
                         next_client_id += 1;

@@ -1,5 +1,4 @@
 use chacha20poly1305::Key;
-use rayon::prelude::*;
 use rust_scribble_common::messages_common::{GameStateUpdate, DisconnectMessage, PlayersUpdate};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read};
@@ -54,7 +53,6 @@ fn handle_message(
         let id = msg["id"].as_i64().unwrap();
         server_state.remove_player(id);
         msg_to_send.push(json!(PlayersUpdate::new(server_state.players().lock().unwrap().to_vec())));
-        msg_to_send.push(msg);
     } else {
         msg_to_send.push(msg);
     }
@@ -77,24 +75,16 @@ pub(crate) fn check_send_broadcast_messages(
     server_state: Arc<Mutex<ServerState>>,
     rx: mpsc::Receiver<serde_json::Value>,
 ) {
-    //TODO add disconnect for client_txs
-    let remove_clients: Arc<Mutex<Vec<i64>>> = Arc::new(Mutex::new(Vec::new()));
-
     loop {
         if let Ok(msg) = rx.recv() {
 
             let msgs_to_send = handle_message(msg, &mut server_state.lock().unwrap());
 
             for msg in msgs_to_send.iter() {
-                if msg["kind"].eq("disconnect") {
-                    let mut remove_clients = remove_clients.lock().unwrap();
-                    remove_clients.push(msg["id"].as_i64().unwrap());
-                } else {
-                    let client_txs = server_state.lock().unwrap().client_tx();
-                    println!("Clients {:?}", client_txs);
-                    for tx in client_txs.iter() {
-                        //TODO deal with disconnects!
-                        tx.send(msg.clone()).unwrap();
+                let client_txs = server_state.lock().unwrap().client_tx();
+                for client in client_txs.iter() {
+                    if client.tx.send(msg.clone()).is_err() {
+                        server_state.lock().unwrap().remove_client_tx(client.id);
                     }
                 }
             }

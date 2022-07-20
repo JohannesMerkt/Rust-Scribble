@@ -1,15 +1,27 @@
 use std::sync::mpsc;
-use std::sync::{Mutex, Arc, RwLock};
+use std::sync::{Mutex, Arc};
 use parking_lot::{Mutex as PLMutex, Condvar as PLCondvar};
 use rust_scribble_common::messages_common::{GameStateUpdate, PlayersUpdate};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::thread;
 use std::time::Duration;
 use rand::Rng;
 use delegate::delegate;
 
 use rust_scribble_common::gamestate_common::*;
-use rust_scribble_common::network_common::*;
+
+#[derive(Clone)]
+pub struct ClientSendChannel {
+    pub id: i64,
+    pub tx: mpsc::Sender<Value>,
+}
+
+impl ClientSendChannel {
+    pub fn new(id: i64) -> (Self, mpsc::Receiver<Value>) {
+        let (tx, rx) = mpsc::channel();
+        (ClientSendChannel {id,tx,},rx)
+    }
+}
 
 pub struct ServerState {
     state: Arc<Mutex<ServerStateInner>>,
@@ -18,11 +30,10 @@ pub struct ServerState {
 
 impl ServerState {
     pub fn default(words: Vec<String>, tx: mpsc::Sender<serde_json::Value>) -> Self {
-        let server_state = ServerState {
+        ServerState {
             state: Arc::new(Mutex::new(ServerStateInner::default(words, tx))),
             started_lock: Arc::new((PLMutex::new(false), PLCondvar::new())),
-        };
-        server_state
+        }
     }
 
     pub fn start_game_on_timer(&mut self, secs: u64) {
@@ -40,7 +51,7 @@ impl ServerState {
             if !(*started) {
                 local_state.lock().unwrap().start_game();
                 *started = true;
-                let _ = tx.send(json!(GameStateUpdate::new(local_state.lock().unwrap().game_state.lock().unwrap().clone()))).unwrap();
+                let _ = tx.send(json!(GameStateUpdate::new(local_state.lock().unwrap().game_state.lock().unwrap().clone())));
                 let _ = tx.send(json!(PlayersUpdate::new(local_state.lock().unwrap().players.lock().unwrap().to_vec())));
             } // if already true, another startup thread has started the game already
             cvar.notify_all(); // other startup threads are notified and will terminate as started is already set to true
@@ -58,7 +69,8 @@ impl ServerState {
             pub fn remove_player(&mut self, player_id: i64);
             pub fn set_ready(&mut self, player_id: i64, status: bool) -> bool;
             pub fn chat_or_guess(&mut self, player_id: i64, message: &String) -> bool;
-            pub fn add_client_tx(&mut self, tx: mpsc::Sender<serde_json::Value>);
+            pub fn add_client_tx(&mut self, tx: ClientSendChannel);
+            pub fn remove_client_tx(&mut self, id: i64);
             // start_game should not be accessible directly to keep the interface clean.
             // A countdown of 0 seconds can be used to start immediately
             // but the game is usually started with some small countdown instead
@@ -72,16 +84,13 @@ impl ServerState {
     pub fn players(&self) -> Arc<Mutex<Vec<Player>>> {
         self.state.lock().unwrap().players.clone()
     }
-    pub fn net_infos(&self) -> Arc<RwLock<Vec<Arc<RwLock<NetworkInfo>>>>> {
-        self.state.lock().unwrap().net_infos.clone()
-    }
     pub fn word_list(&self) -> Arc<Mutex<Vec<String>>> {
         self.state.lock().unwrap().word_list.clone()
     }
     pub fn tx(&self) -> mpsc::Sender<serde_json::Value> {
         self.state.lock().unwrap().tx.clone()
     }
-    pub fn client_tx(&self) -> Vec<mpsc::Sender<serde_json::Value>> {
+    pub fn client_tx(&self) -> Vec<ClientSendChannel> {
         self.state.lock().unwrap().client_tx.clone()
     }
 }
@@ -90,10 +99,9 @@ impl ServerState {
 struct ServerStateInner {
     pub game_state: Arc<Mutex<GameState>>,
     pub players: Arc<Mutex<Vec<Player>>>,
-    pub net_infos: Arc<RwLock<Vec<Arc<RwLock<NetworkInfo>>>>>,
     pub word_list: Arc<Mutex<Vec<String>>>,
     pub tx: mpsc::Sender<serde_json::Value>,
-    pub client_tx: Vec<mpsc::Sender<serde_json::Value>>,
+    pub client_tx: Vec<ClientSendChannel>,
 }
 
 impl ServerStateInner {
@@ -101,15 +109,18 @@ impl ServerStateInner {
         ServerStateInner {
             game_state: Arc::new(Mutex::new(GameState::default())),
             players: Arc::new(Mutex::new(Vec::new())),
-            net_infos: Arc::new(RwLock::new(Vec::new())),
             word_list: Arc::new(Mutex::new(words)),
             tx,
             client_tx: Vec::new(),
         }
     }
 
-    pub fn add_client_tx(&mut self, tx: mpsc::Sender<serde_json::Value>) {
+    pub fn add_client_tx(&mut self, tx: ClientSendChannel) {
         self.client_tx.push(tx);
+    }
+
+    pub fn remove_client_tx(&mut self, id: i64) {
+        self.client_tx.retain(|x| x.id != id);
     }
 
     pub fn add_player(&mut self, id: i64, name: String) {

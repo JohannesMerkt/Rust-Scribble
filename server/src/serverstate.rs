@@ -58,6 +58,7 @@ impl ServerState {
             pub fn remove_player(&mut self, player_id: i64);
             pub fn set_ready(&mut self, player_id: i64, status: bool) -> bool;
             pub fn chat_or_guess(&mut self, player_id: i64, message: &String) -> bool;
+            pub fn add_client_tx(&mut self, tx: mpsc::Sender<serde_json::Value>);
             // start_game should not be accessible directly to keep the interface clean.
             // A countdown of 0 seconds can be used to start immediately
             // but the game is usually started with some small countdown instead
@@ -80,6 +81,9 @@ impl ServerState {
     pub fn tx(&self) -> mpsc::Sender<serde_json::Value> {
         self.state.lock().unwrap().tx.clone()
     }
+    pub fn client_tx(&self) -> Vec<mpsc::Sender<serde_json::Value>> {
+        self.state.lock().unwrap().client_tx.clone()
+    }
 }
 
 
@@ -89,6 +93,7 @@ struct ServerStateInner {
     pub net_infos: Arc<RwLock<Vec<Arc<RwLock<NetworkInfo>>>>>,
     pub word_list: Arc<Mutex<Vec<String>>>,
     pub tx: mpsc::Sender<serde_json::Value>,
+    pub client_tx: Vec<mpsc::Sender<serde_json::Value>>,
 }
 
 impl ServerStateInner {
@@ -99,7 +104,12 @@ impl ServerStateInner {
             net_infos: Arc::new(RwLock::new(Vec::new())),
             word_list: Arc::new(Mutex::new(words)),
             tx,
+            client_tx: Vec::new(),
         }
+    }
+
+    pub fn add_client_tx(&mut self, tx: mpsc::Sender<serde_json::Value>) {
+        self.client_tx.push(tx);
     }
 
     pub fn add_player(&mut self, id: i64, name: String) {

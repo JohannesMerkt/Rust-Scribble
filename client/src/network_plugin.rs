@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use crate::clientstate;
 use crate::network;
 use crate::clientstate::*;
 use serde_json::json;
@@ -71,41 +72,42 @@ pub fn send_line(networkstate: &mut ResMut<NetworkState>, line: &mut Line) {
         let _ = send_message(network_info, &msg);
     }
 }
+ 
+fn handle_messsages(network_info: &mut NetworkInfo, clientstate: &mut ClientState) {
+
+    if let Ok(msg)= network::read_messages(network_info, 5) {
+        for m in msg {
+            println!("{}", m);
+            println!("{}", m["kind"]);
+
+            if m["kind"].eq("chat_message") {
+                let message = m["message"].as_str().unwrap();
+                let player_id = m["id"].as_i64().unwrap();
+                let chat_message = ChatMessage::new(player_id, message.to_string());
+                clientstate.chat_messages.push(chat_message);
+            } else if m["kind"].eq("update") { 
+                if let Ok(new_gs) = serde_json::from_str(&m["game_state"].to_string()) {
+                    clientstate.game_state = new_gs;
+                }
+            } else if m["kind"].eq("player_update") { 
+                if let Ok(new_gs) = serde_json::from_str(&m["players"].to_string()) {
+                    clientstate.players = new_gs;
+                }
+            } else if m["kind"].eq("add_line") {
+                if let Ok(line) = serde_json::from_str(&m["line"].to_string()) {
+                    let length = clientstate.lines.len();
+                    clientstate.lines.insert(length - 1, line);
+                }
+            }
+        }
+    }
+}
 
 fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut networkstate: ResMut<NetworkState>, mut clientstate: ResMut<ClientState>) {
     if timer.0.tick(time.delta()).just_finished() {
-
-        //Read a message from the network
-        //TODO Replace nested IF's
-        if let Some(network_info) = networkstate.info.as_mut() {
+        if let Some(mut network_info) = networkstate.info.as_mut() {
             if message_waiting(network_info) {
-                if let Ok(msg)= network::read_messages(network_info, 5) {
-                    //TODO handle messages 
-                    for m in msg {
-                        println!("{}", m);
-                        println!("{}", m["kind"]);
-
-                        if m["kind"].eq("chat_message") {
-                            let message = m["message"].as_str().unwrap();
-                            let player_id = m["id"].as_i64().unwrap();
-                            let chat_message = ChatMessage::new(player_id, message.to_string());
-                            clientstate.chat_messages.push(chat_message);
-                        } else if m["kind"].eq("update") { 
-                            if let Ok(new_gs) = serde_json::from_str(&m["game_state"].to_string()) {
-                                clientstate.game_state = new_gs;
-                            }
-                        } else if m["kind"].eq("player_update") { 
-                            if let Ok(new_gs) = serde_json::from_str(&m["players"].to_string()) {
-                                clientstate.players = new_gs;
-                            }
-                        } else if m["kind"].eq("add_line") {
-                            if let Ok(line) = serde_json::from_str(&m["line"].to_string()) {
-                                let length = clientstate.lines.len();
-                                clientstate.lines.insert(length - 1, line);
-                            }
-                        }
-                    }
-                }
+                handle_messsages(&mut network_info, &mut clientstate)
             }
         }
     }

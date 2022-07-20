@@ -1,8 +1,9 @@
 use chacha20poly1305::Key;
+use rayon::prelude::*;
 use rust_scribble_common::messages_common::{GameStateUpdate, DisconnectMessage, PlayersUpdate};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read};
-use std::sync::{Arc, Mutex, mpsc, RwLock};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 use x25519_dalek::PublicKey;
 use rust_scribble_common::network_common::*;
@@ -76,7 +77,7 @@ pub(crate) fn check_send_broadcast_messages(
     server_state: Arc<Mutex<ServerState>>,
     rx: mpsc::Receiver<serde_json::Value>,
 ) {
-    //TODO remove disconnected clients from net_infos
+    //TODO add disconnect for client_txs
     let remove_clients: Arc<Mutex<Vec<i64>>> = Arc::new(Mutex::new(Vec::new()));
 
     loop {
@@ -89,29 +90,12 @@ pub(crate) fn check_send_broadcast_messages(
                     let mut remove_clients = remove_clients.lock().unwrap();
                     remove_clients.push(msg["id"].as_i64().unwrap());
                 } else {
-                    let net_infos = server_state.lock().unwrap().net_infos();
-                    net_infos.write().unwrap().iter_mut().for_each(|net_info| {
-                        let mut net_info = net_info.write().unwrap();
-                        match send_message(&mut net_info, msg) {
-                            Ok(_) => {}
-                            Err(_) => {
-                                remove_clients.lock().unwrap().push(net_info.id);
-                            }
-                        }
-                    });
-                }
-            }
-
-            {
-                let net_infos = server_state.lock().unwrap().net_infos();
-                if remove_clients.lock().unwrap().len() > 0 {
-                    for id in remove_clients.lock().unwrap().iter() {
-                        let index = net_infos.read().unwrap().iter().position(|x| x.read().unwrap().id == *id);
-                        if let Some(index) = index {
-                            net_infos.write().unwrap().remove(index);
-                        }
+                    let client_txs = server_state.lock().unwrap().client_tx();
+                    println!("Clients {:?}", client_txs);
+                    for tx in client_txs.iter() {
+                        //TODO deal with disconnects!
+                        tx.send(msg.clone()).unwrap();
                     }
-                    remove_clients.lock().unwrap().clear();
                 }
             }
         }
@@ -129,9 +113,9 @@ pub(crate) fn check_send_broadcast_messages(
 /// * `Some(bool)` - True if the client is still connected, false if not.
 /// * `None` - There was no ping sent.
 /// 
-fn send_ping_message(net_info: &Arc<RwLock<NetworkInfo>>, time_elapsed: Duration) -> Option<bool> {
+fn send_ping_message(net_info: &mut NetworkInfo, time_elapsed: Duration) -> Option<bool> {
     if time_elapsed.as_secs() > 15 {
-        match send_message(&mut net_info.write().unwrap(), &json!({"kind": "ping"})) {
+        match send_message(net_info, &json!({"kind": "ping"})) {
             Ok(_) => Some(true),
             Err(_) => Some(false)
         }
@@ -151,10 +135,9 @@ fn send_ping_message(net_info: &Arc<RwLock<NetworkInfo>>, time_elapsed: Duration
 /// * bool - True if the client is connected, false if not.
 /// 
 fn client_initialize(
-    net_info: &Arc<RwLock<NetworkInfo>>,
+    net_info: &mut NetworkInfo,
     tx: &mpsc::Sender<serde_json::Value>,
 ) {
-    let mut net_info = net_info.write().unwrap();
     let _ = net_info
         .tcp_stream
         .set_read_timeout(Some(Duration::from_millis(50)));
@@ -189,23 +172,30 @@ fn client_initialize(
 /// * `tx` - The channel to send messages to the broadcast thread.
 /// 
 pub(crate) fn handle_client(
-    net_info: Arc<RwLock<NetworkInfo>>,
+    mut net_info: NetworkInfo,
     tx: mpsc::Sender<serde_json::Value>,
+    rx: mpsc::Receiver<serde_json::Value>,
 ) {
 
-    client_initialize(&net_info, &tx);
+    client_initialize(&mut net_info, &tx);
     let mut keepalive = Instant::now();
-    let player_id = net_info.read().unwrap().id;
+    let player_id = net_info.id;
 
     //Start of the main loop to read messages and send keepalive pings
     //TODO ideally this would be done async or something cleaner
     loop {
-        if let Ok(msg) = read_tcp_message(&mut net_info.write().unwrap()) {
+        if let Ok(msg) = read_tcp_message(&mut net_info) {
             let _ = tx.send(msg);
             keepalive = Instant::now();
         }
 
-        match send_ping_message(&net_info, Instant::now().duration_since(keepalive)) {
+        // Check if rx has messages waiting and if yes, send them to the client
+        if let Ok(msg) = rx.try_recv() {
+            println!("Got Message from broadcast thread {:?}", msg);
+            let _ = send_message(&mut net_info, &msg);
+        }       
+
+        match send_ping_message(&mut net_info, Instant::now().duration_since(keepalive)) {
             Some(false) => {
                 let _ = tx.send(json!(DisconnectMessage::new(player_id)));
                 return

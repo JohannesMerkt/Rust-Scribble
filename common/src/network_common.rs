@@ -33,9 +33,10 @@ pub struct NetworkInfo {
 /// * `checksum` - The checksum to be verified.
 /// 
 pub fn check_checksum(text: &[u8], checksum: u32) -> Result<(),Error> {
-    match checksum == crc32fast::hash(text) {
-        true => Ok(()),
-        false => Err(Error::new(ErrorKind::InvalidData, "Checksum is not correct"))
+    if checksum == crc32fast::hash(text) {
+        Ok(())
+    } else {
+        Err(Error::new(ErrorKind::InvalidData, "Checksum is not correct"))
     }
 }
 

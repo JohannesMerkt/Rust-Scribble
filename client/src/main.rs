@@ -16,7 +16,7 @@ mod network_plugin;
 }*/
 
 use bevy::prelude::*;
-use bevy_egui::{EguiPlugin};
+use bevy_egui::EguiPlugin;
 
 
 fn main() {

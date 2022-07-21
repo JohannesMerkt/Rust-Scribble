@@ -1,21 +1,21 @@
-use bevy::prelude::*;
 use crate::clientstate;
-use crate::network;
 use crate::clientstate::*;
-use serde_json::json;
-use rust_scribble_common::network_common::*;
-use rust_scribble_common::messages_common::*;
+use crate::network;
+use bevy::prelude::*;
 use rust_scribble_common::gamestate_common::*;
+use rust_scribble_common::messages_common::*;
+use rust_scribble_common::network_common::*;
+use serde_json::json;
 
 pub struct NetworkState {
     /// client player name
     pub name: String,
-    /// client input for server address to connect to 
+    /// client input for server address to connect to
     pub address: String,
     /// client input for server port number to connect to
     pub port: u16,
     // network info if none then not connected
-    pub info: Option<NetworkInfo>
+    pub info: Option<NetworkInfo>,
 }
 
 impl Default for NetworkState {
@@ -24,20 +24,23 @@ impl Default for NetworkState {
             name: "Player".to_string(),
             address: "127.0.0.1".to_string(),
             port: 3000,
-            info: None
+            info: None,
         }
-        
     }
 }
 
 struct CheckNetworkTimer(Timer);
 
 pub fn connect(networkstate: &mut ResMut<NetworkState>) {
-    let res = network::connect_to_server(networkstate.address.as_str(), networkstate.port, networkstate.name.as_str());
+    let res = network::connect_to_server(
+        networkstate.address.as_str(),
+        networkstate.port,
+        networkstate.name.as_str(),
+    );
     match res {
         Ok(info) => {
             networkstate.info = Some(info);
-        },
+        }
         Err(_) => {
             println!("Could not connect to server");
         }
@@ -45,7 +48,6 @@ pub fn connect(networkstate: &mut ResMut<NetworkState>) {
 }
 
 pub fn send_chat_message(networkstate: &mut ResMut<NetworkState>, msg: String) {
-
     if let Some(network_info) = networkstate.info.as_mut() {
         let msg = json!(ChatMessage::new(network_info.id, msg));
         let _ = send_message(network_info, &msg);
@@ -72,10 +74,9 @@ pub fn send_line(networkstate: &mut ResMut<NetworkState>, line: &mut Line) {
         let _ = send_message(network_info, &msg);
     }
 }
- 
-fn handle_messsages(network_info: &mut NetworkInfo, clientstate: &mut ClientState) {
 
-    if let Ok(msg)= network::read_messages(network_info, 5) {
+fn handle_messsages(network_info: &mut NetworkInfo, clientstate: &mut ClientState) {
+    if let Ok(msg) = network::read_messages(network_info, 5) {
         for m in msg {
             println!("{}", m);
             println!("{}", m["kind"]);
@@ -85,11 +86,11 @@ fn handle_messsages(network_info: &mut NetworkInfo, clientstate: &mut ClientStat
                 let player_id = m["id"].as_i64().unwrap();
                 let chat_message = ChatMessage::new(player_id, message.to_string());
                 clientstate.chat_messages.push(chat_message);
-            } else if m["kind"].eq("update") { 
+            } else if m["kind"].eq("update") {
                 if let Ok(new_gs) = serde_json::from_str(&m["game_state"].to_string()) {
                     clientstate.game_state = new_gs;
                 }
-            } else if m["kind"].eq("player_update") { 
+            } else if m["kind"].eq("player_update") {
                 if let Ok(new_gs) = serde_json::from_str(&m["players"].to_string()) {
                     clientstate.players = new_gs;
                 }
@@ -103,7 +104,12 @@ fn handle_messsages(network_info: &mut NetworkInfo, clientstate: &mut ClientStat
     }
 }
 
-fn update_network(time: Res<Time>, mut timer: ResMut<CheckNetworkTimer>, mut networkstate: ResMut<NetworkState>, mut clientstate: ResMut<ClientState>) {
+fn update_network(
+    time: Res<Time>,
+    mut timer: ResMut<CheckNetworkTimer>,
+    mut networkstate: ResMut<NetworkState>,
+    mut clientstate: ResMut<ClientState>,
+) {
     if timer.0.tick(time.delta()).just_finished() {
         if let Some(mut network_info) = networkstate.info.as_mut() {
             if message_waiting(network_info) {

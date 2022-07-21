@@ -2,13 +2,19 @@
 mod network;
 mod serverstate;
 
-use std::{sync::{Arc, Mutex, mpsc}, net::{Ipv4Addr, SocketAddrV4, TcpListener}, io::{Write, BufReader, BufRead}, thread, path::Path, fs::File};
+use crate::serverstate::ServerState;
+use crate::{network::handle_client, serverstate::ClientSendChannel};
 use chacha20poly1305::Key;
 use clap::Parser;
 use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
-use crate::{network::handle_client, serverstate::ClientSendChannel};
-use crate::serverstate::ServerState;
-
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, Write},
+    net::{Ipv4Addr, SocketAddrV4, TcpListener},
+    path::Path,
+    sync::{mpsc, Arc, Mutex},
+    thread,
+};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -29,7 +35,6 @@ fn read_words_from_file(filename: impl AsRef<Path>) -> Vec<String> {
 }
 
 fn main() {
-
     let args = Args::parse();
 
     let words = read_words_from_file(args.words);
@@ -68,26 +73,26 @@ pub fn tcp_server(port: u16, words: Vec<String>) {
 
         //TODO Clean up this nested mess
         match tcp_stream.write_all(public_key.as_bytes()) {
-            Ok(_) => {
-                match tcp_stream.write_all(&next_client_id.to_be_bytes()) {
-                    Ok(_) => {
-                        let net_info = NetworkInfo {
-                            id: next_client_id,
-                            tcp_stream,
-                            key: *Key::from_slice(public_key.as_bytes()),
-                            secret_key: Some(secret_key),
-                        };
+            Ok(_) => match tcp_stream.write_all(&next_client_id.to_be_bytes()) {
+                Ok(_) => {
+                    let net_info = NetworkInfo {
+                        id: next_client_id,
+                        tcp_stream,
+                        key: *Key::from_slice(public_key.as_bytes()),
+                        secret_key: Some(secret_key),
+                    };
 
-                        let (client_tx, thread_rx) = ClientSendChannel::new(next_client_id);
-                        let thread_tx = tx.clone();
-                        server_state.lock().unwrap().add_client_tx(client_tx);
+                    let (client_tx, thread_rx) = ClientSendChannel::new(next_client_id);
+                    let thread_tx = tx.clone();
+                    server_state.lock().unwrap().add_client_tx(client_tx);
 
-                        thread::spawn(move || {handle_client(net_info, thread_tx, thread_rx);});
-                        next_client_id += 1;
-                    }
-                    Err(_e) => println!("Error sending id"),
+                    thread::spawn(move || {
+                        handle_client(net_info, thread_tx, thread_rx);
+                    });
+                    next_client_id += 1;
                 }
-            }
+                Err(_e) => println!("Error sending id"),
+            },
             Err(e) => println!("Error sending public key to {}: {}", addr, e),
         }
     }

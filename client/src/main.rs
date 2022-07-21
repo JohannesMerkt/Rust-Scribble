@@ -1,8 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
-mod network;
 mod clientstate;
-mod ui;
+mod network;
 mod network_plugin;
+mod ui;
 
 /*fn main() {
     tracing_subscriber::fmt::init();
@@ -16,8 +16,7 @@ mod network_plugin;
 }*/
 
 use bevy::prelude::*;
-use bevy_egui::{EguiPlugin};
-
+use bevy_egui::EguiPlugin;
 
 fn main() {
     App::new()

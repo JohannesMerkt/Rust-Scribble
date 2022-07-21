@@ -2,12 +2,16 @@ use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext};
 use rayon::prelude::*;
 
-use rust_scribble_common::gamestate_common::*;
-use crate::network_plugin;
 use crate::clientstate::ClientState;
+use crate::network_plugin;
+use rust_scribble_common::gamestate_common::*;
 
 /// this system handles rendering the ui
-pub fn render_ui(mut egui_context: ResMut<EguiContext>, mut networkstate: ResMut<network_plugin::NetworkState>, mut clientstate: ResMut<ClientState>) {
+pub fn render_ui(
+    mut egui_context: ResMut<EguiContext>,
+    mut networkstate: ResMut<network_plugin::NetworkState>,
+    mut clientstate: ResMut<ClientState>,
+) {
     if networkstate.info.is_none() {
         render_connect_view(&mut egui_context, &mut networkstate);
     } else if clientstate.game_state.in_game {
@@ -17,7 +21,10 @@ pub fn render_ui(mut egui_context: ResMut<EguiContext>, mut networkstate: ResMut
     }
 }
 
-fn render_connect_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut ResMut<network_plugin::NetworkState>) {
+fn render_connect_view(
+    egui_context: &mut ResMut<EguiContext>,
+    networkstate: &mut ResMut<network_plugin::NetworkState>,
+) {
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         ui.heading("Rust Scribble:");
         ui.label("Name");
@@ -33,14 +40,21 @@ fn render_connect_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mu
     });
 }
 
-fn render_lobby_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut ResMut<network_plugin::NetworkState>, clientstate: &mut ResMut<ClientState>) {
+fn render_lobby_view(
+    egui_context: &mut ResMut<EguiContext>,
+    networkstate: &mut ResMut<network_plugin::NetworkState>,
+    clientstate: &mut ResMut<ClientState>,
+) {
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         ui.heading("Connected!");
         render_chat_area(ui, networkstate, clientstate);
         render_player_list(ui, clientstate);
 
         if let Some(net_info) = networkstate.info.as_mut() {
-            let player_result = clientstate.players.iter().find(|player| player.id == net_info.id);
+            let player_result = clientstate
+                .players
+                .iter()
+                .find(|player| player.id == net_info.id);
             if let Some(player) = player_result {
                 if player.ready {
                     if ui.button("Not Ready").clicked() {
@@ -54,7 +68,11 @@ fn render_lobby_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut 
     });
 }
 
-fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut ResMut<network_plugin::NetworkState>, clientstate: &mut ResMut<ClientState>) {
+fn render_ingame_view(
+    egui_context: &mut ResMut<EguiContext>,
+    networkstate: &mut ResMut<network_plugin::NetworkState>,
+    clientstate: &mut ResMut<ClientState>,
+) {
     egui::SidePanel::right("side_panel").show(egui_context.ctx_mut(), |ui| {
         render_chat_area(ui, networkstate, clientstate);
         render_player_list(ui, clientstate);
@@ -67,16 +85,23 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
 
     let net_info = networkstate.info.as_ref().unwrap();
     //TODO FIX: This is dangerous at the moment Thread Panic!
-    let is_drawer = clientstate.players.iter().find(|player| player.id == net_info.id).unwrap().drawing;
+    let is_drawer = clientstate
+        .players
+        .iter()
+        .find(|player| player.id == net_info.id)
+        .unwrap()
+        .drawing;
 
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         // The central panel the region left after adding TopPanel's and SidePanel's
         ui.horizontal(|ui| {
             ui.add(egui::Slider::new(&mut clientstate.stroke.width, 1.0..=10.0).text("width"));
-            if ui.color_edit_button_srgba(&mut clientstate.stroke.color).clicked_elsewhere() {
-            };
+            if ui
+                .color_edit_button_srgba(&mut clientstate.stroke.color)
+                .clicked_elsewhere()
+            {};
             if ui.button("Eraser").clicked() {
-                clientstate.stroke.color = egui::Color32::from_rgb(255,255,255); 
+                clientstate.stroke.color = egui::Color32::from_rgb(255, 255, 255);
             }
             /*if ui.button("Color").clicked() {
                 *color = self.curr_stroke.color;
@@ -89,12 +114,16 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
             /*if ui.button("Clear Painting").clicked() {
                 self.all_lines.clear();
             }*/
-        }); 
+        });
         ui.label("Paint with your mouse/touch!");
         egui::Frame::canvas(ui.style()).show(ui, |ui| {
-            let (mut response, painter) = ui.allocate_painter(ui.available_size_before_wrap(), egui::Sense::drag());
+            let (mut response, painter) =
+                ui.allocate_painter(ui.available_size_before_wrap(), egui::Sense::drag());
 
-            let to_screen = egui::emath::RectTransform::from_to(egui::Rect::from_min_size(egui::Pos2::ZERO, response.rect.square_proportions()), response.rect);
+            let to_screen = egui::emath::RectTransform::from_to(
+                egui::Rect::from_min_size(egui::Pos2::ZERO, response.rect.square_proportions()),
+                response.rect,
+            );
             let from_screen = to_screen.inverse();
 
             if clientstate.lines.is_empty() {
@@ -102,7 +131,7 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
                 let color = clientstate.stroke.color;
                 clientstate.lines.push(Line {
                     positions: Vec::new(),
-                    stroke: egui::Stroke::new(width, color)
+                    stroke: egui::Stroke::new(width, color),
                 });
             }
 
@@ -119,7 +148,10 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
                     network_plugin::send_line(networkstate, current_line);
                     let width = clientstate.stroke.width;
                     let color = clientstate.stroke.color;
-                    let new_line = Line { positions: vec![], stroke: egui::Stroke::new(width, color)};
+                    let new_line = Line {
+                        positions: vec![],
+                        stroke: egui::Stroke::new(width, color),
+                    };
                     clientstate.lines.push(new_line);
                     response.mark_changed();
                 }
@@ -127,7 +159,8 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
             let mut shapes = vec![];
             for line in &clientstate.lines {
                 if line.positions.len() >= 2 {
-                    let points: Vec<egui::Pos2> = line.positions.par_iter().map(|p| to_screen * *p).collect();
+                    let points: Vec<egui::Pos2> =
+                        line.positions.par_iter().map(|p| to_screen * *p).collect();
                     shapes.push(egui::Shape::line(points, line.stroke));
                 }
             }
@@ -137,39 +170,49 @@ fn render_ingame_view(egui_context: &mut ResMut<EguiContext>, networkstate: &mut
     });
 }
 
-fn render_chat_area(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin::NetworkState>, clientstate: &mut ResMut<ClientState>) {
+fn render_chat_area(
+    ui: &mut egui::Ui,
+    networkstate: &mut ResMut<network_plugin::NetworkState>,
+    clientstate: &mut ResMut<ClientState>,
+) {
     ui.heading("Chat");
     let text_style = egui::TextStyle::Body;
     let row_height = ui.text_style_height(&text_style);
-    egui::ScrollArea::vertical().auto_shrink([false; 2]).stick_to_bottom().max_height(200.0).show_rows(
-        ui,
-        row_height,
-        100,
-        |ui, _| {
+    egui::ScrollArea::vertical()
+        .auto_shrink([false; 2])
+        .stick_to_bottom()
+        .max_height(200.0)
+        .show_rows(ui, row_height, 100, |ui, _| {
             for chat_message in clientstate.chat_messages.iter() {
-                let search_player_result = clientstate.players.par_iter().find_any(|player| player.id == chat_message.id);
+                let search_player_result = clientstate
+                    .players
+                    .par_iter()
+                    .find_any(|player| player.id == chat_message.id);
                 if let Some(player) = search_player_result {
-                    ui.label(format!("{}: {}",player.name, chat_message.message));
+                    ui.label(format!("{}: {}", player.name, chat_message.message));
                     ui.set_min_width(100.0);
                 }
-
             }
-        },
-    );
+        });
     ui.horizontal(|ui| {
         ui.label("Chat: ");
         ui.text_edit_singleline(&mut clientstate.chat_message_input);
-        if ui.button("Send").clicked() || (ui.input().key_pressed(egui::Key::Enter) && !clientstate.chat_message_input.is_empty()) {
+        if ui.button("Send").clicked()
+            || (ui.input().key_pressed(egui::Key::Enter)
+                && !clientstate.chat_message_input.is_empty())
+        {
             network_plugin::send_chat_message(networkstate, clientstate.chat_message_input.clone());
             clientstate.chat_message_input.clear();
         }
-
     });
 }
 
 fn render_player_list(ui: &mut egui::Ui, clientstate: &mut ResMut<ClientState>) {
     ui.heading("Players");
     for player in &clientstate.players {
-        ui.label(format!("{} - ready: {} - playing: {} - drawing: {} - guessed word: {}",player.name, player.ready, player.playing, player.drawing, player.guessed_word));
+        ui.label(format!(
+            "{} - ready: {} - playing: {} - drawing: {} - guessed word: {}",
+            player.name, player.ready, player.playing, player.drawing, player.guessed_word
+        ));
     }
 }

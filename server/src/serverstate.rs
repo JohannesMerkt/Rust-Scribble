@@ -1,12 +1,12 @@
-use std::sync::mpsc;
-use std::sync::{Mutex, Arc};
-use parking_lot::{Mutex as PLMutex, Condvar as PLCondvar};
+use delegate::delegate;
+use parking_lot::{Condvar as PLCondvar, Mutex as PLMutex};
+use rand::Rng;
 use rust_scribble_common::messages_common::{GameStateUpdate, PlayersUpdate};
 use serde_json::{json, Value};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use rand::Rng;
-use delegate::delegate;
 
 use rust_scribble_common::gamestate_common::*;
 
@@ -19,7 +19,7 @@ pub struct ClientSendChannel {
 impl ClientSendChannel {
     pub fn new(id: i64) -> (Self, mpsc::Receiver<Value>) {
         let (tx, rx) = mpsc::channel();
-        (ClientSendChannel {id,tx,},rx)
+        (ClientSendChannel { id, tx }, rx)
     }
 }
 
@@ -51,11 +51,24 @@ impl ServerState {
             if !(*started) {
                 local_state.lock().unwrap().start_game();
                 *started = true;
-                let _ = tx.send(json!(GameStateUpdate::new(local_state.lock().unwrap().game_state.lock().unwrap().clone())));
-                let _ = tx.send(json!(PlayersUpdate::new(local_state.lock().unwrap().players.lock().unwrap().to_vec())));
+                let _ = tx.send(json!(GameStateUpdate::new(
+                    local_state
+                        .lock()
+                        .unwrap()
+                        .game_state
+                        .lock()
+                        .unwrap()
+                        .clone()
+                )));
+                let _ = tx.send(json!(PlayersUpdate::new(
+                    local_state.lock().unwrap().players.lock().unwrap().to_vec()
+                )));
             } // if already true, another startup thread has started the game already
             cvar.notify_all(); // other startup threads are notified and will terminate as started is already set to true
-            println!("Debug: Startup Thread with {} secs terminated (early)", secs)
+            println!(
+                "Debug: Startup Thread with {} secs terminated (early)",
+                secs
+            )
         });
     }
 
@@ -94,7 +107,6 @@ impl ServerState {
         self.state.lock().unwrap().client_tx.clone()
     }
 }
-
 
 struct ServerStateInner {
     pub game_state: Arc<Mutex<GameState>>,

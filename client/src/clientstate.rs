@@ -1,9 +1,9 @@
-use egui::Stroke;
-use egui::Color32;
-use rust_scribble_common::messages_common::ChatMessage;
-use rust_scribble_common::gamestate_common::*;
-use serde::{Deserialize, Serialize};
 use bevy::prelude::*;
+use egui::Color32;
+use egui::Stroke;
+use rust_scribble_common::gamestate_common::*;
+use rust_scribble_common::messages_common::ChatMessage;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct ClientState {
@@ -19,16 +19,15 @@ pub struct ClientState {
     pub game_state: GameState,
     /// Players in the game
     pub players: Vec<Player>,
-
 }
 
 impl Default for ClientState {
     fn default() -> Self {
-        ClientState { 
-            stroke: Stroke::new(10.,Color32::RED), 
-            lines: Vec::new(), 
-            chat_message_input: String::new(), 
-            chat_messages: Vec::new(), 
+        ClientState {
+            stroke: Stroke::new(10., Color32::RED),
+            lines: Vec::new(),
+            chat_message_input: String::new(),
+            chat_messages: Vec::new(),
             game_state: GameState::default(),
             players: Vec::new(),
         }
@@ -39,7 +38,6 @@ pub struct ClientStatePlugin;
 
 impl Plugin for ClientStatePlugin {
     fn build(&self, app: &mut App) {
-        app
-            .init_resource::<ClientState>();
+        app.init_resource::<ClientState>();
     }
 }

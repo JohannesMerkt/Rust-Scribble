@@ -20,7 +20,7 @@ rayon = "1.5.3"
 clap = { version = "3.2.8", features = ["derive"] }
 delegate = "0.7.0"
 parking_lot = "0.12.1"
-rust_scribble_common = {path = "../common", default-features = false, features = ["no-encryption"]}
+rust_scribble_common = {path = "../common"}
 
 [profile.release]
 opt-level = 2

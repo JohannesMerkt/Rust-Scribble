@@ -1,4 +1,3 @@
-
 use serde::{Deserialize, Serialize};
 
 use egui::{Pos2, Stroke};
@@ -6,7 +5,7 @@ use egui::{Pos2, Stroke};
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Line {
     pub positions: Vec<Pos2>,
-    pub stroke: Stroke
+    pub stroke: Stroke,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -59,7 +58,7 @@ impl GameState {
             in_game: false,
             word: "".to_string(),
             word_length: 0,
-            time: 0
+            time: 0,
         }
     }
 }

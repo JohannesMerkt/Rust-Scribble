@@ -26,6 +26,7 @@ pub fn read_messages(
     for _ in 0..=n_msg_to_read {
         match read_tcp_message(net_info) {
             Ok(msg) => {
+                println!("RCV: {}", &msg.to_string());
                 messages.push(msg);
             }
             Err(_) => {

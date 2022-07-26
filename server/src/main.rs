@@ -78,8 +78,10 @@ pub fn tcp_server(port: u16, words: Vec<String>) {
                             secret_key: Some(secret_key),
                         };
 
+                        
                         let (client_tx, thread_rx) = ClientSendChannel::new(next_client_id);
                         let thread_tx = tx.clone();
+                        //TODO make this a set instead of vec
                         server_state.lock().unwrap().add_client_tx(client_tx);
 
                         thread::spawn(move || {handle_client(net_info, thread_tx, thread_rx);});

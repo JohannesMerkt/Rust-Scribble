@@ -67,15 +67,61 @@ pub fn encrypt_json(mut json_message: Vec<u8>, shared_key: Key) -> Vec<u8> {
     for byte in checksum.to_be_bytes().iter() {
         json_message.push(*byte);
     }
+
+    #[cfg(not(feature="no-encryption"))]
     let ciphertext = ChaCha20Poly1305::new(&shared_key).encrypt(&nonce, &json_message[..]).expect("encryption failure!");
+
+    #[cfg(feature="no-encryption")]
+    let ciphertext = json_message.clone();
 
     //Add 12 bytes for the nonce and 4 bytes for the checksum
     let msg_size = ciphertext.len() + 12;
     pack_network_message(msg_size, nonce, ciphertext)
 }
 
+/// Decrypts a JSON message
+/// 
+/// # Arguments
+/// * `msg_buf` - The message buffer to be decrypted.
+/// * `msg_size` - The size of the message.
+/// * `key` - The shared key to be used for encryption.
+/// 
+/// # Returns
+/// * Result<Value, Error> - The json decrypted message if ok
+///
+pub fn decrypt_message(msg_buf: &mut Vec<u8>, msg_size: usize, key: &Key) -> Result<serde_json::Value, Box<dyn error::Error>> {
+    let json_message: Value;
+    #[cfg(not(feature="no-encryption"))]
+    {
+        let cipher = ChaCha20Poly1305::new(&key);
 
-/// Packs a the components of a mesasge into a singular message
+        let nonce: Nonce = GenericArray::clone_from_slice(&msg_buf[0..12]);
+        let ciphertext = &msg_buf[12..msg_size];
+
+        json_message = match cipher.decrypt(&nonce, ciphertext) {
+            Ok(plaintext) => {    //if check_checksum of ciphertext returns false, throw error
+                //get the last four bytes of the plaintext and put it a checksum variable
+                let vec_text = &plaintext.to_vec()[..plaintext.len() - 4];
+                let checksum:u32 = u32::from_be_bytes(plaintext[plaintext.len() - 4..plaintext.len()].try_into()?);
+                check_checksum(vec_text, checksum)?;
+                serde_json::from_slice(&vec_text)?
+            },
+            Err(_) => return Err(Box::new(Error::new(ErrorKind::Other, "Decryption failed!"))),
+        };
+    }
+
+    #[cfg(feature="no-encryption")]
+    {
+        let ciphertext = &msg_buf[12..msg_size-4];
+        let result:Result<Value, serde_json::Error> = serde_json::from_slice(&ciphertext);
+        println!("{:?}", result); 
+        json_message = result?;
+    }
+    
+    Ok(json_message)
+}
+
+/// Packs a the components of a message into a singular message
 /// 
 /// # Arguments
 /// * `msg_size` - The size of the message.
@@ -161,29 +207,13 @@ pub fn read_tcp_message(
     let mut size = [0; (usize::BITS / 8) as usize];
     let msg_size;
     let mut msg_buf;
-    let cipher;
 
     net_info.tcp_stream.read_exact(&mut size)?;
     msg_size = usize::from_le_bytes(size);
 
     msg_buf = vec![0; msg_size];
     net_info.tcp_stream.read_exact(&mut msg_buf)?;
-    cipher = ChaCha20Poly1305::new(&net_info.key);
 
-    let nonce: Nonce = GenericArray::clone_from_slice(&msg_buf[0..12]);
-    let ciphertext = &msg_buf[12..msg_size];
-
-    let json_message = match cipher.decrypt(&nonce, ciphertext) {
-        Ok(plaintext) => {    //if check_checksum of ciphertext returns false, throw error
-            //get the last four bytes of the plaintext and put it a checksum variable
-            let vec_text = &plaintext.to_vec()[..plaintext.len() - 4];
-            let checksum:u32 = u32::from_be_bytes(plaintext[plaintext.len() - 4..plaintext.len()].try_into()?);
-            check_checksum(vec_text, checksum)?;
-            serde_json::from_slice(&vec_text)?
-        },
-        Err(_) => return Err(Box::new(Error::new(ErrorKind::Other, "Decryption failed!"))),
-    };
-
-    Ok(json_message)
+    decrypt_message(&mut msg_buf, msg_size, &net_info.key)
 
 }

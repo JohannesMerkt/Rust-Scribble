@@ -4,8 +4,11 @@ version = "0.1.0"
 authors = []
 edition = "2021"
 
+[features]
+no-encryption = ["rust_scribble_common/no-encryption"]
+
 [dependencies]
-rust_scribble_common = {path = "../common"}
+rust_scribble_common = {path = "../common", default-features = false, features = ["no-encryption"]}
 
 egui = {version="0.18.1", features = ["persistence"]}
 serde = { version = "1", features = ["derive"] }

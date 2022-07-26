@@ -131,7 +131,7 @@ fn client_initialize(
 ) {
     let _ = net_info
         .tcp_stream
-        .set_read_timeout(Some(Duration::from_millis(50)));
+        .set_read_timeout(Some(Duration::from_millis(20)));
 
     let mut buffer = [0; 32];
     let _ = net_info.tcp_stream.read(&mut buffer);
@@ -182,7 +182,6 @@ pub(crate) fn handle_client(
 
         // Check if rx has messages waiting and if yes, send them to the client
         if let Ok(msg) = rx.try_recv() {
-            println!("Got Message from broadcast thread {:?}", msg);
             let _ = send_message(&mut net_info, &msg);
         }       
 

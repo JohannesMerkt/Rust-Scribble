@@ -25,15 +25,6 @@ struct Args {
     words: String,
 }
 
-// Get Words from File and put them in a vector
-fn read_words_from_file(filename: impl AsRef<Path>) -> Vec<String> {
-    let file = File::open(filename).expect("no such file");
-    let buf = BufReader::new(file);
-    buf.lines()
-        .map(|l| l.expect("Could not parse line"))
-        .collect()
-}
-
 fn main() {
     let args = Args::parse();
 
@@ -41,6 +32,21 @@ fn main() {
     println!("{:?}", words);
 
     tcp_server(args.port, words);
+}
+
+/// Get Words from File and put them in a vector
+///
+/// # Arguments
+/// * `filename` - The path to the file containing the words.
+///
+/// # Returns
+/// * Vec<String> - A vector of strings containing the words.
+fn read_words_from_file(filename: impl AsRef<Path>) -> Vec<String> {
+    let file = File::open(filename).expect("no such file");
+    let buf = BufReader::new(file);
+    buf.lines()
+        .map(|l| l.expect("Could not parse line"))
+        .collect()
 }
 
 /// Runs the listening server for incoming connections.
@@ -71,31 +77,29 @@ pub fn tcp_server(port: u16, words: Vec<String>) {
         let (mut tcp_stream, addr) = listener.accept().unwrap();
         println!("Connection received! {:?} is Connected.", addr);
 
-        //TODO Clean up this nested mess
-        match tcp_stream.write_all(public_key.as_bytes()) {
-            Ok(_) => match tcp_stream.write_all(&next_client_id.to_be_bytes()) {
-                Ok(_) => {
-                    let net_info = NetworkInfo {
-                        id: next_client_id,
-                        tcp_stream,
-                        key: *Key::from_slice(public_key.as_bytes()),
-                        secret_key: Some(secret_key),
-                    };
+        let send_pk = tcp_stream.write_all(public_key.as_bytes());
+        let send_id = tcp_stream.write_all(&next_client_id.to_be_bytes());
 
-                        
-                        let (client_tx, thread_rx) = ClientSendChannel::new(next_client_id);
-                        let thread_tx = tx.clone();
-                        //TODO make this a set instead of vec
-                        server_state.lock().unwrap().add_client_tx(client_tx);
+        if send_pk.is_ok() && send_id.is_ok() {
 
-                    thread::spawn(move || {
-                        handle_client(net_info, thread_tx, thread_rx);
-                    });
-                    next_client_id += 1;
-                }
-                Err(_e) => println!("Error sending id"),
-            },
-            Err(e) => println!("Error sending public key to {}: {}", addr, e),
+            let net_info = NetworkInfo {
+                id: next_client_id,
+                tcp_stream,
+                key: *Key::from_slice(public_key.as_bytes()),
+                secret_key: Some(secret_key),
+            };
+
+            let (client_tx, thread_rx) = ClientSendChannel::new(next_client_id);
+            let thread_tx = tx.clone();
+            //TODO make this a set instead of vec
+            server_state.lock().unwrap().add_client_tx(client_tx);
+
+            thread::spawn(move || {
+                handle_client(net_info, thread_tx, thread_rx);
+            });
+            next_client_id += 1;
+        } else {
+            println!("Error sending public key or id to {}", addr);
         }
     }
 }

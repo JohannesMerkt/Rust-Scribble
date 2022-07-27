@@ -102,9 +102,8 @@ fn render_ingame_view(
 
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         if is_drawer {
-            ui.label(format!(
-                "Paint the word with mouse/touch!"
-            ));
+            ui.label(
+                "Paint the word with mouse/touch!".to_string());
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.horizontal(|ui| {
                 ui.add(egui::Slider::new(&mut clientstate.stroke.width, 1.0..=10.0).text("width"));
@@ -115,9 +114,6 @@ fn render_ingame_view(
                 if ui.button("Eraser").clicked() {
                     clientstate.stroke.color = egui::Color32::from_rgb(255, 255, 255);
                 }
-                /*if ui.button("Color").clicked() {
-                    *color = self.curr_stroke.color;
-                }*/
                 let (_id, stroke_rect) = ui.allocate_space(ui.spacing().interact_size);
                 let left = stroke_rect.left_center();
                 let right = stroke_rect.right_center();
@@ -127,16 +123,12 @@ fn render_ingame_view(
                     "Word: {}",
                     clientstate.game_state.word
                 )).font(egui::FontId::proportional(40.0)));
-                /*if ui.button("Clear Painting").clicked() {
-                    self.all_lines.clear();
-                }*/
             });
         } else {
             ui.label("Guess the word!");
-            let re = Regex::new(r"[A-Za-z]").unwrap();
             ui.label(egui::RichText::new(format!(
                 "Word: {}",
-                re.replace_all(&clientstate.game_state.word, " _ ")
+                get_word_as_underscores(&clientstate.game_state.word)
             )).font(egui::FontId::proportional(40.0)));
         }
 
@@ -243,7 +235,6 @@ fn render_game_time(ui: &mut egui::Ui, clientstate: &mut ResMut<ClientState>) {
 
 fn render_player_list(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin::NetworkState>, clientstate: &mut ResMut<ClientState>) {
     ui.group(|ui| {
-        let net_info = networkstate.info.as_ref().unwrap();
         let mut playing_count = 0;
         let mut lobby_count = 0;
         for player in &clientstate.players {
@@ -263,18 +254,14 @@ fn render_player_list(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugi
             for player in &clientstate.players {
                 if player.playing {
                     ui.columns(2, |cols| {
-                        if net_info.id == player.id {
-                            cols[0].label(format!("{} (You)",player.name));
-                        } else {
-                            cols[0].label(format!("{}",player.name));
-                        }
+                        cols[0].label(get_player_name_with_you(networkstate, player));
+                        let mut player_status = "❓";
                         if player.drawing {
-                            cols[1].label("✏");
+                            player_status = "✏";
                         } else if player.guessed_word {
-                            cols[1].label("✔");
-                        } else {
-                            cols[1].label("❓");
+                            player_status = "✔";
                         }
+                        cols[1].label(player_status);
                     });
                 }
             }
@@ -289,20 +276,29 @@ fn render_player_list(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugi
             for player in &clientstate.players {
                 if !player.playing {
                     ui.columns(2, |cols| {
-                        if net_info.id == player.id {
-                            cols[0].label(format!("{} (You)",player.name));
-                        } else {
-                            cols[0].label(format!("{}",player.name));
-                        }
+                        cols[0].label(get_player_name_with_you(networkstate, player));
+                        let mut ready_state = "✖";
                         if player.ready {
-                            cols[1].label("✔");
-                        } else {
-                            cols[1].label("✖");
+                            ready_state = "✔";
                         }
+                        cols[1].label(ready_state);
                         
                     });
                 }
             }
         }
     });
+}
+
+fn get_player_name_with_you(networkstate: &mut ResMut<network_plugin::NetworkState>, player: &Player) -> std::string::String {
+    let net_info = networkstate.info.as_ref().unwrap();
+    if net_info.id == player.id {
+        return format!("{} (You)", player.name)
+    }
+    player.name.to_string()
+}
+
+fn get_word_as_underscores(word: &std::string::String) -> std::string::String {
+    let re = Regex::new(r"[A-Za-z]").unwrap();
+    re.replace_all(&word.to_string(), " _ ").to_string()
 }

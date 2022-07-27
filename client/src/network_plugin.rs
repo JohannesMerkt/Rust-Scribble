@@ -116,7 +116,7 @@ fn update_network(
     if timer.0.tick(time.delta()).just_finished() {
         if let Some(mut network_info) = networkstate.info.as_mut() {
             if message_waiting(network_info) {
-                handle_messsages(&mut network_info, &mut clientstate)
+                handle_messsages(&mut network_info, &mut clientstate);
             }
         }
     }

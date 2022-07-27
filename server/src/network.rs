@@ -89,7 +89,6 @@ pub(crate) fn check_send_broadcast_messages(
                 let client_txs = server_state.lock().unwrap().client_tx();
                 for client in client_txs.iter() {
                     if client.tx.send(msg.clone()).is_err() {
-                        server_state.lock().unwrap().remove_player(client.id);
                         server_state.lock().unwrap().remove_client_tx(client);
                     }
                 }

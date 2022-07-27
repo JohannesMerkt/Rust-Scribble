@@ -154,6 +154,7 @@ impl ServerStateInner {
     }
 
     pub fn remove_client_tx(&mut self, tx: &ClientSendChannel) {
+        self.remove_player(tx.id);
         self.client_tx.remove(&tx);
     }
 

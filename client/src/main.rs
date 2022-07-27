@@ -20,6 +20,10 @@ use bevy_egui::EguiPlugin;
 
 fn main() {
     App::new()
+        .insert_resource(WindowDescriptor {
+            title: "Rust Scribble".to_string(),
+            ..default()
+        })
         .add_plugins(DefaultPlugins)
         .add_plugin(EguiPlugin)
         .add_plugin(clientstate::ClientStatePlugin)

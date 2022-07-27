@@ -292,14 +292,15 @@ fn render_player_list(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugi
         }
         if playing_count > 0 {
             ui.heading("Playing");
-            ui.columns(2, |cols| {
+            ui.columns(3, |cols| {
                 cols[0].label("Name");
                 cols[1].label("Status");
+                cols[2].label("Score");
             });
             ui.separator();
             for player in &clientstate.players {
                 if player.playing {
-                    ui.columns(2, |cols| {
+                    ui.columns(3, |cols| {
                         cols[0].label(get_player_name_with_you(networkstate, player));
                         let mut player_status = "❓";
                         if player.drawing {
@@ -308,27 +309,29 @@ fn render_player_list(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugi
                             player_status = "✔";
                         }
                         cols[1].label(player_status);
+                        cols[2].label(player.score.to_string());
                     });
                 }
             }
         }
         if lobby_count > 0 {
             ui.heading("Waiting in Lobby");
-            ui.columns(2, |cols| {
+            ui.columns(3, |cols| {
                 cols[0].label("Name");
                 cols[1].label("Ready");
+                cols[2].label("Score");
             });
             ui.separator();
             for player in &clientstate.players {
                 if !player.playing {
-                    ui.columns(2, |cols| {
+                    ui.columns(3, |cols| {
                         cols[0].label(get_player_name_with_you(networkstate, player));
                         let mut ready_state = "✖";
                         if player.ready {
                             ready_state = "✔";
                         }
                         cols[1].label(ready_state);
-                        
+                        cols[2].label(player.score.to_string());
                     });
                 }
             }

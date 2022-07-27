@@ -46,7 +46,7 @@ fn render_lobby_view(
     networkstate: &mut ResMut<network_plugin::NetworkState>,
     clientstate: &mut ResMut<ClientState>,
 ) {
-    egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
+    egui::SidePanel::right("side_panel").show(egui_context.ctx_mut(), |ui| {
         ui.heading("Connected!");
         render_chat_area(ui, networkstate, clientstate);
         render_player_list(ui, clientstate);
@@ -66,6 +66,10 @@ fn render_lobby_view(
                 }
             }
         }
+    });
+
+    egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
+        ui.label(egui::RichText::new("Lobby").font(egui::FontId::proportional(40.0)));
     });
 }
 
@@ -96,6 +100,9 @@ fn render_ingame_view(
 
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         if is_drawer {
+            ui.label(format!(
+                "Paint the word with mouse/touch!"
+            ));
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.horizontal(|ui| {
                 ui.add(egui::Slider::new(&mut clientstate.stroke.width, 1.0..=10.0).text("width"));
@@ -122,9 +129,6 @@ fn render_ingame_view(
                     self.all_lines.clear();
                 }*/
             });
-            ui.label(format!(
-                "Paint the word with mouse/touch!"
-            ));
         } else {
             ui.label("Guess the word!");
             let re = Regex::new(r"[A-Za-z]").unwrap();
@@ -226,11 +230,56 @@ fn render_chat_area(
 }
 
 fn render_player_list(ui: &mut egui::Ui, clientstate: &mut ResMut<ClientState>) {
-    ui.heading("Players");
+    let mut playing_count = 0;
+    let mut lobby_count = 0;
     for player in &clientstate.players {
-        ui.label(format!(
-            "{} - ready: {} - playing: {} - drawing: {} - guessed word: {}",
-            player.name, player.ready, player.playing, player.drawing, player.guessed_word
-        ));
+        if player.playing {
+            playing_count += 1;
+        } else {
+            lobby_count += 1;
+        }
+    }
+    if playing_count > 0 {
+        ui.heading("Playing");
+        ui.columns(2, |cols| {
+            cols[0].label("Name");
+            cols[1].label("Status");
+        });
+        ui.separator();
+        for player in &clientstate.players {
+            if player.playing {
+                ui.columns(2, |cols| {
+                    cols[0].label(format!("{}",player.name));
+                    if player.drawing {
+                        cols[1].label("✏");
+                    } else if player.guessed_word {
+                        cols[1].label("✔");
+                    } else {
+                        cols[1].label("❓");
+                    }
+                });
+            }
+        }
+    }
+    if lobby_count > 0 {
+        ui.heading("Waiting in Lobby");
+        ui.columns(2, |cols| {
+            cols[0].label("Name");
+            cols[1].label("Ready");
+        });
+        ui.separator();
+        for player in &clientstate.players {
+            if !player.playing {
+                ui.columns(2, |cols| {
+                    cols[0].label(format!("{}",player.name));
+                    if player.ready {
+                        cols[1].label("✔");
+                    } else {
+                        cols[1].label("✖");
+                    }
+                    
+                });
+            }
+        }
     }
 }

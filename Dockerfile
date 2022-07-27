@@ -1,4 +1,5 @@
 FROM rust:1.62-slim-buster as builder
+RUN apt-get update
 RUN apt install librust-alsa-sys-dev
 #RUN apt-get install -y libasound2-dev portaudio19-dev build-essential libpulse-dev libdbus-1-dev 
 RUN apt-get install -y libsdl2-dev

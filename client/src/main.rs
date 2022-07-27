@@ -4,17 +4,6 @@ mod network;
 mod network_plugin;
 mod ui;
 
-/*fn main() {
-    tracing_subscriber::fmt::init();
-
-    let native_options = eframe::NativeOptions::default();
-    eframe::run_native(
-        "Scribble",
-        native_options,
-        Box::new(|_| Box::new(TemplateApp::new())),
-    );
-}*/
-
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
 

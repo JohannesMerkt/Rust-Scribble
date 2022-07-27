@@ -103,7 +103,7 @@ impl ServerState {
             pub fn add_player(&mut self, id: i64, name: String);
             pub fn remove_player(&mut self, player_id: i64);
             pub fn set_ready(&mut self, player_id: i64, status: bool) -> bool;
-            pub fn broadcast_chat_message(&mut self, player_id: i64, message: &String) -> bool;
+            pub fn broadcast_chat_message(&mut self, message: &String) -> bool;
             pub fn chat_or_guess(&mut self, player_id: i64, message: &String) -> bool;
             pub fn add_client_tx(&mut self, tx: ClientSendChannel);
             pub fn remove_client_tx(&mut self, tx: &ClientSendChannel);
@@ -120,7 +120,7 @@ impl ServerState {
     pub fn players(&self) -> Arc<Mutex<Vec<Player>>> {
         self.state.lock().unwrap().players.clone()
     }
-    pub fn word_list(&self) -> Arc<Mutex<Vec<String>>> {
+    pub fn _word_list(&self) -> Arc<Mutex<Vec<String>>> {
         self.state.lock().unwrap().word_list.clone()
     }
     pub fn tx(&self) -> mpsc::Sender<serde_json::Value> {
@@ -204,7 +204,7 @@ impl ServerStateInner {
         }
     }
 
-    pub fn broadcast_chat_message(&mut self, player_id: i64, message: &String) -> bool {
+    pub fn broadcast_chat_message(&mut self, message: &String) -> bool {
         let mut broadcast_message = true;
         {
             let game_state = self.game_state.lock().unwrap();

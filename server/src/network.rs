@@ -49,7 +49,6 @@ fn handle_message(msg: serde_json::Value, server_state: &mut ServerState) -> Vec
             server_state.end_game();
         }
         if server_state.broadcast_chat_message(
-            msg["id"].as_i64().unwrap(),
             &msg["message"].as_str().unwrap().to_string(),
         ) {
             msg_to_send.push(msg);

@@ -220,7 +220,7 @@ impl ServerStateInner {
         {
             let game_state = self.game_state.lock().unwrap();
             let mut players = self.players.lock().unwrap();
-            if game_state.in_game && game_state.word.eq(message) {
+            if game_state.in_game && game_state.word.to_lowercase().eq(&message.to_lowercase()) {
                 for player in &mut players.iter_mut() {
                     if player.id == player_id && !player.drawing {
                         player.guessed_word = true;

@@ -4,11 +4,11 @@ use rand::Rng;
 use rust_scribble_common::messages_common::{GameStateUpdate, PlayersUpdate};
 use serde_json::{json, Value};
 use std::cmp::Ordering;
+use std::collections::BTreeSet;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use std::collections::BTreeSet;
 
 use rust_scribble_common::gamestate_common::*;
 
@@ -44,7 +44,6 @@ impl PartialEq for ClientSendChannel {
 }
 
 impl Eq for ClientSendChannel {}
-
 
 pub struct ServerState {
     state: Arc<Mutex<ServerStateInner>>,

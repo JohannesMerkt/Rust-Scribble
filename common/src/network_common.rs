@@ -1,4 +1,3 @@
-
 use chacha20poly1305::{Key, Nonce};
 use rand::Rng;
 use rand_core::OsRng;
@@ -11,11 +10,11 @@ use std::io::Write;
 use std::net::TcpStream;
 use x25519_dalek::{PublicKey, ReusableSecret};
 
-#[cfg(not(feature="no-encryption"))]
+#[cfg(not(feature = "no-encryption"))]
 use {
-    generic_array::GenericArray,
     chacha20poly1305::aead::{Aead, NewAead},
     chacha20poly1305::ChaCha20Poly1305,
+    generic_array::GenericArray,
 };
 
 pub struct NetworkInfo {
@@ -75,10 +74,12 @@ pub fn encrypt_json(mut json_message: Vec<u8>, _shared_key: Key) -> Vec<u8> {
         json_message.push(*byte);
     }
 
-    #[cfg(not(feature="no-encryption"))]
-    let ciphertext = ChaCha20Poly1305::new(&_shared_key).encrypt(&nonce, &json_message[..]).expect("encryption failure!");
+    #[cfg(not(feature = "no-encryption"))]
+    let ciphertext = ChaCha20Poly1305::new(&_shared_key)
+        .encrypt(&nonce, &json_message[..])
+        .expect("encryption failure!");
 
-    #[cfg(feature="no-encryption")]
+    #[cfg(feature = "no-encryption")]
     let ciphertext = json_message.clone();
 
     //Add 12 bytes for the nonce and 4 bytes for the checksum
@@ -87,18 +88,22 @@ pub fn encrypt_json(mut json_message: Vec<u8>, _shared_key: Key) -> Vec<u8> {
 }
 
 /// Decrypts a JSON message
-/// 
+///
 /// # Arguments
 /// * `msg_buf` - The message buffer to be decrypted.
 /// * `msg_size` - The size of the message.
 /// * `key` - The shared key to be used for encryption.
-/// 
+///
 /// # Returns
 /// * Result<Value, Error> - The json decrypted message if ok
 ///
-pub fn decrypt_message(msg_buf: &mut Vec<u8>, msg_size: usize, _key: &Key) -> Result<serde_json::Value, Box<dyn error::Error>> {
+pub fn decrypt_message(
+    msg_buf: &mut Vec<u8>,
+    msg_size: usize,
+    _key: &Key,
+) -> Result<serde_json::Value, Box<dyn error::Error>> {
     let json_message: Value;
-    #[cfg(not(feature="no-encryption"))]
+    #[cfg(not(feature = "no-encryption"))]
     {
         let cipher = ChaCha20Poly1305::new(&_key);
 
@@ -106,30 +111,32 @@ pub fn decrypt_message(msg_buf: &mut Vec<u8>, msg_size: usize, _key: &Key) -> Re
         let ciphertext = &msg_buf[12..msg_size];
 
         json_message = match cipher.decrypt(&nonce, ciphertext) {
-            Ok(plaintext) => {    //if check_checksum of ciphertext returns false, throw error
+            Ok(plaintext) => {
+                //if check_checksum of ciphertext returns false, throw error
                 //get the last four bytes of the plaintext and put it a checksum variable
                 let vec_text = &plaintext.to_vec()[..plaintext.len() - 4];
-                let checksum:u32 = u32::from_be_bytes(plaintext[plaintext.len() - 4..plaintext.len()].try_into()?);
+                let checksum: u32 =
+                    u32::from_be_bytes(plaintext[plaintext.len() - 4..plaintext.len()].try_into()?);
                 check_checksum(vec_text, checksum)?;
                 serde_json::from_slice(&vec_text)?
-            },
+            }
             Err(_) => return Err(Box::new(Error::new(ErrorKind::Other, "Decryption failed!"))),
         };
     }
 
-    #[cfg(feature="no-encryption")]
+    #[cfg(feature = "no-encryption")]
     {
-        let ciphertext = &msg_buf[12..msg_size-4];
-        let result:Result<Value, serde_json::Error> = serde_json::from_slice(&ciphertext);
-        println!("{:?}", result); 
+        let ciphertext = &msg_buf[12..msg_size - 4];
+        let result: Result<Value, serde_json::Error> = serde_json::from_slice(&ciphertext);
+        println!("{:?}", result);
         json_message = result?;
     }
-    
+
     Ok(json_message)
 }
 
 /// Packs a the components of a message into a singular message
-/// 
+///
 /// # Arguments
 /// * `msg_size` - The size of the message.
 /// * `nonce` - The nonce of the message.
@@ -205,7 +212,6 @@ pub fn send_message(net_info: &mut NetworkInfo, msg: &Value) -> Result<(), Error
 pub fn read_tcp_message(
     net_info: &mut NetworkInfo,
 ) -> Result<serde_json::Value, Box<dyn error::Error>> {
-
     let mut size = [0; (usize::BITS / 8) as usize];
     let msg_size;
     let mut msg_buf;
@@ -217,5 +223,4 @@ pub fn read_tcp_message(
     net_info.tcp_stream.read_exact(&mut msg_buf)?;
 
     decrypt_message(&mut msg_buf, msg_size, &net_info.key)
-
 }

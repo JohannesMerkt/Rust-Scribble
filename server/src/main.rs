@@ -81,7 +81,6 @@ pub fn tcp_server(port: u16, words: Vec<String>) {
         let send_id = tcp_stream.write_all(&next_client_id.to_be_bytes());
 
         if send_pk.is_ok() && send_id.is_ok() {
-
             let net_info = NetworkInfo {
                 id: next_client_id,
                 tcp_stream,

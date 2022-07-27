@@ -30,6 +30,11 @@ impl Default for NetworkState {
 
 struct CheckNetworkTimer(Timer);
 
+/// Tries to connect to the server using network state settings
+///
+/// # Arguments
+/// * `networkstate` - Holding information about the server to connect to
+///
 pub fn connect(networkstate: &mut ResMut<NetworkState>) {
     let res = network::connect_to_server(
         networkstate.address.as_str(),
@@ -46,6 +51,12 @@ pub fn connect(networkstate: &mut ResMut<NetworkState>) {
     }
 }
 
+/// Sends a chat message to server
+///
+/// # Arguments
+/// * `networkstate` - Holding information about the connection to a server
+/// * `msg` - The message to send
+///
 pub fn send_chat_message(networkstate: &mut ResMut<NetworkState>, msg: String) {
     if let Some(network_info) = networkstate.info.as_mut() {
         let msg = json!(ChatMessage::new(network_info.id, msg));
@@ -53,6 +64,12 @@ pub fn send_chat_message(networkstate: &mut ResMut<NetworkState>, msg: String) {
     }
 }
 
+/// Sends a message to server if the client is ready or not
+///
+/// # Arguments
+/// * `networkstate` - Holding information about the connection to a server
+/// * `ready_state` - Send ready or not ready to server
+///
 pub fn send_ready(networkstate: &mut ResMut<NetworkState>, ready_state: bool) {
     if let Some(network_info) = networkstate.info.as_mut() {
         let msg = json!(ReadyMessage::new(network_info.id, ready_state));
@@ -60,6 +77,11 @@ pub fn send_ready(networkstate: &mut ResMut<NetworkState>, ready_state: bool) {
     }
 }
 
+/// Sends a disconnect message to server
+///
+/// # Arguments
+/// * `networkstate` - Holding information about the connection to a server
+///
 pub fn send_disconnect(networkstate: &mut ResMut<NetworkState>) {
     if let Some(network_info) = networkstate.info.as_mut() {
         let msg = json!(DisconnectMessage::new(network_info.id));
@@ -67,6 +89,12 @@ pub fn send_disconnect(networkstate: &mut ResMut<NetworkState>) {
     }
 }
 
+/// Sends a painting line to the server
+///
+/// # Arguments
+/// * `networkstate` - Holding information about the connection to a server
+/// * `line` - The line to send to the server
+///
 pub fn send_line(networkstate: &mut ResMut<NetworkState>, line: &mut Line) {
     if let Some(network_info) = networkstate.info.as_mut() {
         let msg = json!(PaintingUpdate::new(network_info.id, line.clone()));
@@ -74,6 +102,12 @@ pub fn send_line(networkstate: &mut ResMut<NetworkState>, line: &mut Line) {
     }
 }
 
+/// Function to handle messages recieved by the server
+///
+/// # Arguments
+/// * `network_info` - Holding information about the connection to a server
+/// * `clientstate` - The state of the client holding information about the gamestate, canvas lines, chat messages and players in the game
+///
 fn handle_messsages(network_info: &mut NetworkInfo, clientstate: &mut ClientState) {
     if let Ok(msg) = network::read_messages(network_info, 5) {
         for m in msg {
@@ -107,6 +141,13 @@ fn handle_messsages(network_info: &mut NetworkInfo, clientstate: &mut ClientStat
     }
 }
 
+/// the function that is called regularly to check for server messages
+///
+/// # Arguments
+/// * `timer` - Used for the interval to check for messages
+/// * `networkstate` - Holding information about the connection to a server
+/// * `clientstate` - The state of the client holding information about the gamestate, canvas lines, chat messages and players in the game
+///
 fn update_network(
     time: Res<Time>,
     mut timer: ResMut<CheckNetworkTimer>,

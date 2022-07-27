@@ -36,6 +36,8 @@ impl Default for ClientState {
 
 pub struct ClientStatePlugin;
 
+/// A bevy plugin that creates and initializes a singleton instance of clientstate
+///
 impl Plugin for ClientStatePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ClientState>();

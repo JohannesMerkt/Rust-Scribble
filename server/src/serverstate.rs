@@ -86,7 +86,7 @@ impl ServerState {
     pub fn players(&self) -> Arc<Mutex<Vec<Player>>> {
         self.state.lock().unwrap().players.clone()
     }
-    pub fn word_list(&self) -> Arc<Mutex<Vec<String>>> {
+    pub fn _word_list(&self) -> Arc<Mutex<Vec<String>>> {
         self.state.lock().unwrap().word_list.clone()
     }
     pub fn tx(&self) -> mpsc::Sender<serde_json::Value> {

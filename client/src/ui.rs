@@ -8,6 +8,12 @@ use crate::network_plugin;
 use rust_scribble_common::gamestate_common::*;
 
 /// this system handles rendering the ui
+/// 
+/// # Arguments
+/// * `egui_context` - The egui context used for rendering the egui
+/// * `networkstate` - Holding information about the connection to a server
+/// * `clientstate` - The state of the client holding information about the gamestate, canvas lines, chat messages and players in the game
+/// 
 pub fn render_ui(
     mut egui_context: ResMut<EguiContext>,
     mut networkstate: ResMut<network_plugin::NetworkState>,
@@ -22,6 +28,12 @@ pub fn render_ui(
     }
 }
 
+/// renders the view when connecting to a server
+/// 
+/// # Arguments
+/// * `egui_context` - The egui context used for rendering the egui
+/// * `networkstate` - Holding information about the connection to a server
+/// 
 fn render_connect_view(
     egui_context: &mut ResMut<EguiContext>,
     networkstate: &mut ResMut<network_plugin::NetworkState>,
@@ -41,6 +53,13 @@ fn render_connect_view(
     });
 }
 
+/// renders the view when connected to a server and in the lobby
+/// 
+/// # Arguments
+/// * `egui_context` - The egui context used for rendering the egui
+/// * `networkstate` - Holding information about the connection to a server
+/// * `clientstate` - The state of the client holding information about the gamestate, canvas lines, chat messages and players in the game
+/// 
 fn render_lobby_view(
     egui_context: &mut ResMut<EguiContext>,
     networkstate: &mut ResMut<network_plugin::NetworkState>,
@@ -72,6 +91,13 @@ fn render_lobby_view(
     });
 }
 
+/// renders the view when connected to a server and playing the game
+/// 
+/// # Arguments
+/// * `egui_context` - The egui context used for rendering the egui
+/// * `networkstate` - Holding information about the connection to a server
+/// * `clientstate` - The state of the client holding information about the gamestate, canvas lines, chat messages and players in the game
+/// 
 fn render_ingame_view(
     egui_context: &mut ResMut<EguiContext>,
     networkstate: &mut ResMut<network_plugin::NetworkState>,
@@ -110,32 +136,22 @@ fn render_ingame_view(
                 if ui.button("Eraser").clicked() {
                     clientstate.stroke.color = egui::Color32::from_rgb(255, 255, 255);
                 }
-                /*if ui.button("Color").clicked() {
-                    *color = self.curr_stroke.color;
-                }*/
                 let (_id, stroke_rect) = ui.allocate_space(ui.spacing().interact_size);
                 let left = stroke_rect.left_center();
                 let right = stroke_rect.right_center();
                 ui.painter().line_segment([left, right], clientstate.stroke);
                 ui.separator();
-                ui.label(
-                    egui::RichText::new(format!("Word: {}", clientstate.game_state.word))
-                        .font(egui::FontId::proportional(40.0)),
-                );
-                /*if ui.button("Clear Painting").clicked() {
-                    self.all_lines.clear();
-                }*/
+                ui.label(egui::RichText::new(format!(
+                    "Word: {}",
+                    clientstate.game_state.word
+                )).font(egui::FontId::proportional(40.0)));
             });
         } else {
             ui.label("Guess the word!");
-            let re = Regex::new(r"[A-Za-z]").unwrap();
-            ui.label(
-                egui::RichText::new(format!(
-                    "Word: {}",
-                    re.replace_all(&clientstate.game_state.word, " _ ")
-                ))
-                .font(egui::FontId::proportional(40.0)),
-            );
+            ui.label(egui::RichText::new(format!(
+                "Word: {}",
+                get_word_as_underscores(&clientstate.game_state.word)
+            )).font(egui::FontId::proportional(40.0)));
         }
 
         egui::Frame::canvas(ui.style()).show(ui, |ui| {
@@ -192,6 +208,13 @@ fn render_ingame_view(
     });
 }
 
+/// renders a chat area with chat history and message input
+/// 
+/// # Arguments
+/// * `ui` - The current UI context to draw the chat area on
+/// * `networkstate` - Holding information about the connection to a server
+/// * `clientstate` - The state of the client holding information about the gamestate, canvas lines, chat messages and players in the game
+/// 
 fn render_chat_area(
     ui: &mut egui::Ui,
     networkstate: &mut ResMut<network_plugin::NetworkState>,
@@ -234,19 +257,27 @@ fn render_chat_area(
     });
 }
 
+/// renders a game time area
+/// 
+/// # Arguments
+/// * `ui` - The current UI context to draw the chat area on
+/// * `clientstate` - The state of the client holding information about the gamestate, canvas lines, chat messages and players in the game
+/// 
 fn render_game_time(ui: &mut egui::Ui, clientstate: &mut ResMut<ClientState>) {
     ui.group(|ui| {
         ui.label(format!("Time: {}s", clientstate.game_state.time));
     });
 }
 
-fn render_player_list(
-    ui: &mut egui::Ui,
-    networkstate: &mut ResMut<network_plugin::NetworkState>,
-    clientstate: &mut ResMut<ClientState>,
-) {
+/// renders a player list area
+/// 
+/// # Arguments
+/// * `ui` - The current UI context to draw the chat area on
+/// * `networkstate` - Holding information about the connection to a server
+/// * `clientstate` - The state of the client holding information about the gamestate, canvas lines, chat messages and players in the game
+/// 
+fn render_player_list(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin::NetworkState>, clientstate: &mut ResMut<ClientState>) {
     ui.group(|ui| {
-        let net_info = networkstate.info.as_ref().unwrap();
         let mut playing_count = 0;
         let mut lobby_count = 0;
         for player in &clientstate.players {
@@ -266,18 +297,14 @@ fn render_player_list(
             for player in &clientstate.players {
                 if player.playing {
                     ui.columns(2, |cols| {
-                        if net_info.id == player.id {
-                            cols[0].label(player.name.to_string() + " (You)");
-                        } else {
-                            cols[0].label(player.name.to_string());
-                        }
+                        cols[0].label(get_player_name_with_you(networkstate, player));
+                        let mut player_status = "❓";
                         if player.drawing {
-                            cols[1].label("✏");
+                            player_status = "✏";
                         } else if player.guessed_word {
-                            cols[1].label("✔");
-                        } else {
-                            cols[1].label("❓");
+                            player_status = "✔";
                         }
+                        cols[1].label(player_status);
                     });
                 }
             }
@@ -292,19 +319,40 @@ fn render_player_list(
             for player in &clientstate.players {
                 if !player.playing {
                     ui.columns(2, |cols| {
-                        if net_info.id == player.id {
-                            cols[0].label(player.name.to_string() + " (You)");
-                        } else {
-                            cols[0].label(player.name.to_string());
-                        }
+                        cols[0].label(get_player_name_with_you(networkstate, player));
+                        let mut ready_state = "✖";
                         if player.ready {
-                            cols[1].label("✔");
-                        } else {
-                            cols[1].label("✖");
+                            ready_state = "✔";
                         }
+                        cols[1].label(ready_state);
+                        
                     });
                 }
             }
         }
     });
+}
+
+/// returns the player name as a string and in case its the player name of the client adds (You) to the end
+/// 
+/// # Arguments
+/// * `networkstate` - Holding information about the connection to a server
+/// * `player` - The player to render the name for
+/// 
+fn get_player_name_with_you(networkstate: &mut ResMut<network_plugin::NetworkState>, player: &Player) -> std::string::String {
+    let net_info = networkstate.info.as_ref().unwrap();
+    if net_info.id == player.id {
+        return format!("{} (You)", player.name)
+    }
+    player.name.to_string()
+}
+
+/// returns a word with all letters replaced for underscores
+/// 
+/// # Arguments
+/// * `word` - The word to render as underscores
+/// 
+fn get_word_as_underscores(word: &std::string::String) -> std::string::String {
+    let re = Regex::new(r"[A-Za-z]").unwrap();
+    re.replace_all(&word.to_string(), " _ ").to_string()
 }

@@ -3,47 +3,13 @@ use parking_lot::{Condvar as PLCondvar, Mutex as PLMutex};
 use rand::Rng;
 use rust_scribble_common::messages_common::{GameStateUpdate, PlayersUpdate};
 use serde_json::{json, Value};
-use std::cmp::Ordering;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 use rust_scribble_common::gamestate_common::*;
-
-#[derive(Clone)]
-pub struct ClientSendChannel {
-    pub id: i64,
-    pub tx: mpsc::Sender<Value>,
-}
-
-impl ClientSendChannel {
-    pub fn new(id: i64) -> (Self, mpsc::Receiver<Value>) {
-        let (tx, rx) = mpsc::channel();
-        (ClientSendChannel { id, tx }, rx)
-    }
-}
-
-impl Ord for ClientSendChannel {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.id.cmp(&other.id)
-    }
-}
-
-impl PartialOrd for ClientSendChannel {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for ClientSendChannel {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for ClientSendChannel {}
 
 pub struct ServerState {
     state: Arc<Mutex<ServerStateInner>>,
@@ -103,10 +69,10 @@ impl ServerState {
             pub fn add_player(&mut self, id: i64, name: String);
             pub fn remove_player(&mut self, player_id: i64);
             pub fn set_ready(&mut self, player_id: i64, status: bool) -> bool;
-            pub fn broadcast_chat_message(&mut self, message: &String) -> bool;
-            pub fn chat_or_guess(&mut self, player_id: i64, message: &String) -> bool;
-            pub fn add_client_tx(&mut self, tx: ClientSendChannel);
-            pub fn remove_client_tx(&mut self, tx: &ClientSendChannel);
+            pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> bool;
+            pub fn all_guessed(&mut self) -> bool;
+            pub fn add_client_tx(&mut self, id: i64, tx: mpsc::Sender<Value>);
+            pub fn remove_client_tx(&mut self, id: i64);
             // start_game should not be accessible directly to keep the interface clean.
             // A countdown of 0 seconds can be used to start immediately
             // but the game is usually started with some small countdown instead
@@ -126,7 +92,7 @@ impl ServerState {
     pub fn tx(&self) -> mpsc::Sender<serde_json::Value> {
         self.state.lock().unwrap().tx.clone()
     }
-    pub fn client_tx(&self) -> BTreeSet<ClientSendChannel> {
+    pub fn client_tx(&self) -> BTreeMap<i64, mpsc::Sender<Value>> {
         self.state.lock().unwrap().client_tx.clone()
     }
 }
@@ -136,7 +102,7 @@ struct ServerStateInner {
     pub players: Arc<Mutex<Vec<Player>>>,
     pub word_list: Arc<Mutex<Vec<String>>>,
     pub tx: mpsc::Sender<serde_json::Value>,
-    pub client_tx: BTreeSet<ClientSendChannel>,
+    pub client_tx: BTreeMap<i64, mpsc::Sender<Value>>,
 }
 
 impl ServerStateInner {
@@ -146,17 +112,17 @@ impl ServerStateInner {
             players: Arc::new(Mutex::new(Vec::new())),
             word_list: Arc::new(Mutex::new(words)),
             tx,
-            client_tx: BTreeSet::new(),
+            client_tx: BTreeMap::new(),
         }
     }
 
-    pub fn add_client_tx(&mut self, tx: ClientSendChannel) {
-        self.client_tx.insert(tx);
+    pub fn add_client_tx(&mut self, id: i64, tx: mpsc::Sender<Value>) {
+        self.client_tx.insert(id, tx);
     }
 
-    pub fn remove_client_tx(&mut self, tx: &ClientSendChannel) {
-        self.remove_player(tx.id);
-        self.client_tx.remove(&tx);
+    pub fn remove_client_tx(&mut self, id: i64) {
+        self.remove_player(id);
+        self.client_tx.remove(&id);
     }
 
     pub fn add_player(&mut self, id: i64, name: String) {
@@ -188,59 +154,48 @@ impl ServerStateInner {
         }
     }
 
+    fn all_ready(&self) -> bool {
+        self.players
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|player| player.ready)
+    }
+
     pub fn set_ready(&mut self, player_id: i64, status: bool) -> bool {
+        //Set player with player_id to ready
+        let mut players = self.players.lock().unwrap();
+        if let Some(player) = players.iter_mut().find(|player| player.id == player_id) {
+            player.ready = status;
+            return true;
+        }
+        //Check if all players are ready
+        self.all_ready()
+    }
+
+    pub fn all_guessed(&mut self) -> bool {
+        if self.players.lock().unwrap().iter().all(|player| {
+            !player.drawing && player.guessed_word || player.drawing && !player.guessed_word
+        }) {
+            self.end_game();
+            return true;
+        }
+        false
+    }
+
+    pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> bool {
         let game_state = self.game_state.lock().unwrap();
         let mut players = self.players.lock().unwrap();
-        for player in players.iter_mut() {
-            if player.id == player_id {
-                player.ready = status;
-            }
-        }
-        // check if all are ready to start and enough players
-        if !game_state.in_game && players.len() > 1 {
-            players.iter().all(|player| player.ready)
-        } else {
-            false
-        }
-    }
-
-    pub fn broadcast_chat_message(&mut self, message: &String) -> bool {
-        let mut broadcast_message = true;
-        {
-            let game_state = self.game_state.lock().unwrap();
-            if game_state.in_game && game_state.word.eq(message) {
-                broadcast_message = false;
-            }
-        }
-        broadcast_message
-    }
-
-    pub fn chat_or_guess(&mut self, player_id: i64, message: &String) -> bool {
-        let mut all_guessed = true;
-        {
-            let game_state = self.game_state.lock().unwrap();
-            let mut players = self.players.lock().unwrap();
-            if game_state.in_game && game_state.word.to_lowercase().eq(&message.to_lowercase()) {
-                for player in &mut players.iter_mut() {
-                    if player.id == player_id && !player.drawing {
-                        player.guessed_word = true;
-                        player.score += 50;
-                    }
+        if game_state.in_game && game_state.word.to_lowercase().eq(&message.to_lowercase()) {
+            for player in &mut players.iter_mut() {
+                if player.id == player_id && !player.drawing {
+                    player.guessed_word = true;
+                    player.score += 50;
+                    return true;
                 }
-                for player in &mut players.iter() {
-                    if player.playing && !player.drawing {
-                        all_guessed &= player.guessed_word;
-                    }
-                }
-            } else {
-                all_guessed = false;
             }
         }
-        if all_guessed {
-            self.end_game();
-        }
-
-        all_guessed
+        false
     }
 
     fn get_random_word(&mut self) {

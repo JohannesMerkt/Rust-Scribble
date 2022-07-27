@@ -1,5 +1,7 @@
 use chacha20poly1305::Key;
-use rust_scribble_common::messages_common::{DisconnectMessage, GameStateUpdate, PlayersUpdate, ChatMessage};
+use rust_scribble_common::messages_common::{
+    ChatMessage, DisconnectMessage, GameStateUpdate, PlayersUpdate,
+};
 use rust_scribble_common::network_common::*;
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read};
@@ -42,18 +44,20 @@ fn handle_message(msg: serde_json::Value, server_state: &mut ServerState) -> Vec
             server_state.players().lock().unwrap().to_vec()
         )));
     } else if msg["kind"].eq("chat_message") {
-        if server_state.chat_or_guess(
+        if server_state.chat_or_correct_guess(
             msg["id"].as_i64().unwrap(),
-            &msg["message"].as_str().unwrap().to_string(),
+            msg["message"].as_str().unwrap(),
         ) {
-            server_state.end_game();
-        }
-        if server_state.broadcast_chat_message(
-            &msg["message"].as_str().unwrap().to_string(),
-        ) {
-            msg_to_send.push(msg);
+            if server_state.all_guessed() {
+                //needed to allow timer to start game again
+                server_state.end_game();
+            }
+            msg_to_send.push(json!(ChatMessage::new(
+                msg["id"].as_i64().unwrap(),
+                "Guessed the word correctly!".to_string()
+            )));
         } else {
-            msg_to_send.push(json!(ChatMessage::new(msg["id"].as_i64().unwrap(), "Guessed the word correctly!".to_string())));
+            msg_to_send.push(msg);
         }
     } else if msg["kind"].eq("add_line") {
         msg_to_send.push(msg);
@@ -96,9 +100,9 @@ pub(crate) fn check_send_broadcast_messages(
 
             for msg in msgs_to_send.iter() {
                 let client_txs = server_state.lock().unwrap().client_tx();
-                for client in client_txs.iter() {
-                    if client.tx.send(msg.clone()).is_err() {
-                        server_state.lock().unwrap().remove_client_tx(client);
+                for (client_id, tx) in client_txs.iter() {
+                    if tx.send(msg.clone()).is_err() {
+                        server_state.lock().unwrap().remove_client_tx(*client_id);
                     }
                 }
             }

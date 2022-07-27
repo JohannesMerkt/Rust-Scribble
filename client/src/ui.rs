@@ -69,8 +69,6 @@ fn render_lobby_view(
         render_game_time(ui, clientstate);
         render_player_list(ui, networkstate, clientstate);
         render_chat_area(ui, networkstate, clientstate);
-
-
     });
 
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
@@ -124,12 +122,10 @@ fn render_ingame_view(
         .find(|player| player.id == net_info.id)
         .unwrap()
         .drawing;
-    
 
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         if is_drawer {
-            ui.label(
-                "Paint the word with mouse/touch!".to_string());
+            ui.label("Paint the word with mouse/touch!".to_string());
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.horizontal(|ui| {
                 ui.add(egui::Slider::new(&mut clientstate.stroke.width, 1.0..=10.0).text("width"));
@@ -251,12 +247,14 @@ fn render_chat_area(
                 || (ui.input().key_pressed(egui::Key::Enter)
                     && !clientstate.chat_message_input.is_empty())
             {
-                network_plugin::send_chat_message(networkstate, clientstate.chat_message_input.clone());
+                network_plugin::send_chat_message(
+                    networkstate,
+                    clientstate.chat_message_input.clone(),
+                );
                 clientstate.chat_message_input.clear();
             }
         });
     });
-
 }
 
 /// renders a game time area
@@ -269,7 +267,6 @@ fn render_game_time(ui: &mut egui::Ui, clientstate: &mut ResMut<ClientState>) {
     ui.group(|ui| {
         ui.label(format!("Time: {}s", clientstate.game_state.time));
     });
-    
 }
 
 /// renders a player list area

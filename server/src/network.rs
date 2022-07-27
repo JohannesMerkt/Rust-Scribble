@@ -65,6 +65,9 @@ fn handle_message(msg: serde_json::Value, server_state: &mut ServerState) -> Vec
         msg_to_send.push(json!(GameStateUpdate::new(
             server_state.game_state().lock().unwrap().clone()
         )));
+        msg_to_send.push(json!(PlayersUpdate::new(
+            server_state.players().lock().unwrap().to_vec()
+        )));
     }
 
     msg_to_send

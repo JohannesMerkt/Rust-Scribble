@@ -87,7 +87,11 @@ fn handle_messsages(network_info: &mut NetworkInfo, clientstate: &mut ClientStat
                 clientstate.chat_messages.push(chat_message);
             } else if m["kind"].eq("update") {
                 if let Ok(new_gs) = serde_json::from_str(&m["game_state"].to_string()) {
-                    clientstate.game_state = new_gs;
+                    let gs: GameState = new_gs;
+                    if clientstate.game_state.in_game && !gs.in_game {
+                        clientstate.lines.clear();
+                    }
+                    clientstate.game_state = gs;
                 }
             } else if m["kind"].eq("player_update") {
                 if let Ok(new_gs) = serde_json::from_str(&m["players"].to_string()) {

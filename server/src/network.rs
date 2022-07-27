@@ -1,5 +1,5 @@
 use chacha20poly1305::Key;
-use rust_scribble_common::messages_common::{DisconnectMessage, GameStateUpdate, PlayersUpdate};
+use rust_scribble_common::messages_common::{DisconnectMessage, GameStateUpdate, PlayersUpdate, ChatMessage};
 use rust_scribble_common::network_common::*;
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read};
@@ -48,7 +48,14 @@ fn handle_message(msg: serde_json::Value, server_state: &mut ServerState) -> Vec
         ) {
             server_state.end_game();
         }
-        msg_to_send.push(msg);
+        if server_state.broadcast_chat_message(
+            msg["id"].as_i64().unwrap(),
+            &msg["message"].as_str().unwrap().to_string(),
+        ) {
+            msg_to_send.push(msg);
+        } else {
+            msg_to_send.push(json!(ChatMessage::new(msg["id"].as_i64().unwrap(), "Guessed the word correctly!".to_string())));
+        }
     } else if msg["kind"].eq("add_line") {
         msg_to_send.push(msg);
     } else if msg["kind"].eq("disconnect") {

@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext};
 use rayon::prelude::*;
+use regex::Regex;
 
 use crate::clientstate::ClientState;
 use crate::network_plugin;
@@ -91,31 +92,48 @@ fn render_ingame_view(
         .find(|player| player.id == net_info.id)
         .unwrap()
         .drawing;
+    
 
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
-        // The central panel the region left after adding TopPanel's and SidePanel's
-        ui.horizontal(|ui| {
-            ui.add(egui::Slider::new(&mut clientstate.stroke.width, 1.0..=10.0).text("width"));
-            if ui
-                .color_edit_button_srgba(&mut clientstate.stroke.color)
-                .clicked_elsewhere()
-            {};
-            if ui.button("Eraser").clicked() {
-                clientstate.stroke.color = egui::Color32::from_rgb(255, 255, 255);
-            }
-            /*if ui.button("Color").clicked() {
-                *color = self.curr_stroke.color;
-            }*/
-            let (_id, stroke_rect) = ui.allocate_space(ui.spacing().interact_size);
-            let left = stroke_rect.left_center();
-            let right = stroke_rect.right_center();
-            ui.painter().line_segment([left, right], clientstate.stroke);
-            ui.separator();
-            /*if ui.button("Clear Painting").clicked() {
-                self.all_lines.clear();
-            }*/
-        });
-        ui.label("Paint with your mouse/touch!");
+        if is_drawer {
+            // The central panel the region left after adding TopPanel's and SidePanel's
+            ui.horizontal(|ui| {
+                ui.add(egui::Slider::new(&mut clientstate.stroke.width, 1.0..=10.0).text("width"));
+                if ui
+                    .color_edit_button_srgba(&mut clientstate.stroke.color)
+                    .clicked_elsewhere()
+                {};
+                if ui.button("Eraser").clicked() {
+                    clientstate.stroke.color = egui::Color32::from_rgb(255, 255, 255);
+                }
+                /*if ui.button("Color").clicked() {
+                    *color = self.curr_stroke.color;
+                }*/
+                let (_id, stroke_rect) = ui.allocate_space(ui.spacing().interact_size);
+                let left = stroke_rect.left_center();
+                let right = stroke_rect.right_center();
+                ui.painter().line_segment([left, right], clientstate.stroke);
+                ui.separator();
+                ui.label(egui::RichText::new(format!(
+                    "Word: {}",
+                    clientstate.game_state.word
+                )).font(egui::FontId::proportional(40.0)));
+                /*if ui.button("Clear Painting").clicked() {
+                    self.all_lines.clear();
+                }*/
+            });
+            ui.label(format!(
+                "Paint the word with mouse/touch!"
+            ));
+        } else {
+            ui.label("Guess the word!");
+            let re = Regex::new(r"[A-Za-z]").unwrap();
+            ui.label(egui::RichText::new(format!(
+                "Word: {}",
+                re.replace_all(&clientstate.game_state.word, " _ ")
+            )).font(egui::FontId::proportional(40.0)));
+        }
+
         egui::Frame::canvas(ui.style()).show(ui, |ui| {
             let (mut response, painter) =
                 ui.allocate_painter(ui.available_size_before_wrap(), egui::Sense::drag());

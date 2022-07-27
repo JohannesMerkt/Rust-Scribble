@@ -11,14 +11,12 @@ use std::io::Write;
 use std::net::TcpStream;
 use x25519_dalek::{PublicKey, ReusableSecret};
 
-//TODO possibly make this a single cfg
 #[cfg(not(feature="no-encryption"))]
-use generic_array::GenericArray;
-#[cfg(not(feature="no-encryption"))]
-use chacha20poly1305::aead::{Aead, NewAead};
-#[cfg(not(feature="no-encryption"))]
-use chacha20poly1305::ChaCha20Poly1305;
-
+use {
+    generic_array::GenericArray,
+    chacha20poly1305::aead::{Aead, NewAead},
+    chacha20poly1305::ChaCha20Poly1305,
+};
 
 pub struct NetworkInfo {
     /// The name of the client.

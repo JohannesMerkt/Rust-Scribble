@@ -137,7 +137,6 @@ fn client_initialize(net_info: &mut NetworkInfo, tx: &mpsc::Sender<serde_json::V
     let mut buffer = [0; 32];
     let _ = net_info.tcp_stream.read(&mut buffer);
 
-    //TODO First message should be a user initialization message
     let mut conn = BufReader::new(&net_info.tcp_stream);
     let mut username = String::new();
     let _ = conn.read_line(&mut username);

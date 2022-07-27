@@ -50,8 +50,6 @@ fn render_lobby_view(
         render_game_time(ui, clientstate);
         render_player_list(ui, networkstate, clientstate);
         render_chat_area(ui, networkstate, clientstate);
-
-
     });
 
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
@@ -98,13 +96,10 @@ fn render_ingame_view(
         .find(|player| player.id == net_info.id)
         .unwrap()
         .drawing;
-    
 
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         if is_drawer {
-            ui.label(format!(
-                "Paint the word with mouse/touch!"
-            ));
+            ui.label("Paint the word with mouse/touch!".to_string());
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.horizontal(|ui| {
                 ui.add(egui::Slider::new(&mut clientstate.stroke.width, 1.0..=10.0).text("width"));
@@ -123,10 +118,10 @@ fn render_ingame_view(
                 let right = stroke_rect.right_center();
                 ui.painter().line_segment([left, right], clientstate.stroke);
                 ui.separator();
-                ui.label(egui::RichText::new(format!(
-                    "Word: {}",
-                    clientstate.game_state.word
-                )).font(egui::FontId::proportional(40.0)));
+                ui.label(
+                    egui::RichText::new(format!("Word: {}", clientstate.game_state.word))
+                        .font(egui::FontId::proportional(40.0)),
+                );
                 /*if ui.button("Clear Painting").clicked() {
                     self.all_lines.clear();
                 }*/
@@ -134,10 +129,13 @@ fn render_ingame_view(
         } else {
             ui.label("Guess the word!");
             let re = Regex::new(r"[A-Za-z]").unwrap();
-            ui.label(egui::RichText::new(format!(
-                "Word: {}",
-                re.replace_all(&clientstate.game_state.word, " _ ")
-            )).font(egui::FontId::proportional(40.0)));
+            ui.label(
+                egui::RichText::new(format!(
+                    "Word: {}",
+                    re.replace_all(&clientstate.game_state.word, " _ ")
+                ))
+                .font(egui::FontId::proportional(40.0)),
+            );
         }
 
         egui::Frame::canvas(ui.style()).show(ui, |ui| {
@@ -226,22 +224,27 @@ fn render_chat_area(
                 || (ui.input().key_pressed(egui::Key::Enter)
                     && !clientstate.chat_message_input.is_empty())
             {
-                network_plugin::send_chat_message(networkstate, clientstate.chat_message_input.clone());
+                network_plugin::send_chat_message(
+                    networkstate,
+                    clientstate.chat_message_input.clone(),
+                );
                 clientstate.chat_message_input.clear();
             }
         });
     });
-
 }
 
 fn render_game_time(ui: &mut egui::Ui, clientstate: &mut ResMut<ClientState>) {
     ui.group(|ui| {
         ui.label(format!("Time: {}s", clientstate.game_state.time));
     });
-    
 }
 
-fn render_player_list(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin::NetworkState>, clientstate: &mut ResMut<ClientState>) {
+fn render_player_list(
+    ui: &mut egui::Ui,
+    networkstate: &mut ResMut<network_plugin::NetworkState>,
+    clientstate: &mut ResMut<ClientState>,
+) {
     ui.group(|ui| {
         let net_info = networkstate.info.as_ref().unwrap();
         let mut playing_count = 0;
@@ -264,9 +267,9 @@ fn render_player_list(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugi
                 if player.playing {
                     ui.columns(2, |cols| {
                         if net_info.id == player.id {
-                            cols[0].label(format!("{} (You)",player.name));
+                            cols[0].label(player.name.to_string() + " (You)");
                         } else {
-                            cols[0].label(format!("{}",player.name));
+                            cols[0].label(player.name.to_string());
                         }
                         if player.drawing {
                             cols[1].label("✏");
@@ -290,16 +293,15 @@ fn render_player_list(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugi
                 if !player.playing {
                     ui.columns(2, |cols| {
                         if net_info.id == player.id {
-                            cols[0].label(format!("{} (You)",player.name));
+                            cols[0].label(player.name.to_string() + " (You)");
                         } else {
-                            cols[0].label(format!("{}",player.name));
+                            cols[0].label(player.name.to_string());
                         }
                         if player.ready {
                             cols[1].label("✔");
                         } else {
                             cols[1].label("✖");
                         }
-                        
                     });
                 }
             }

@@ -1,6 +1,6 @@
-use bevy::prelude::*;
 use crate::clientstate::ClientState;
 use crate::network;
+use bevy::prelude::*;
 use rust_scribble_common::gamestate_common::*;
 use rust_scribble_common::messages_common::*;
 use rust_scribble_common::network_common::*;
@@ -114,9 +114,9 @@ fn update_network(
     mut clientstate: ResMut<ClientState>,
 ) {
     if timer.0.tick(time.delta()).just_finished() {
-        if let Some(mut network_info) = networkstate.info.as_mut() {
+        if let Some(network_info) = networkstate.info.as_mut() {
             if message_waiting(network_info) {
-                handle_messsages(&mut network_info, &mut clientstate)
+                handle_messsages(network_info, &mut clientstate)
             }
         }
     }

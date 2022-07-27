@@ -2,8 +2,8 @@
 mod network;
 mod serverstate;
 
+use crate::network::handle_client;
 use crate::serverstate::ServerState;
-use crate::{network::handle_client, serverstate::ClientSendChannel};
 use chacha20poly1305::Key;
 use clap::Parser;
 use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
@@ -88,9 +88,12 @@ pub fn tcp_server(port: u16, words: Vec<String>) {
                 secret_key: Some(secret_key),
             };
 
-            let (client_tx, thread_rx) = ClientSendChannel::new(next_client_id);
+            let (client_tx, thread_rx) = mpsc::channel();
             let thread_tx = tx.clone();
-            server_state.lock().unwrap().add_client_tx(client_tx);
+            server_state
+                .lock()
+                .unwrap()
+                .add_client_tx(next_client_id, client_tx);
 
             thread::spawn(move || {
                 handle_client(net_info, thread_tx, thread_rx);

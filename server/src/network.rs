@@ -25,7 +25,6 @@ fn handle_message(msg: serde_json::Value, server_state: &mut ServerState) -> Vec
 
     let send_update = !msg["kind"].eq("update");
 
-    //TODO create message structs and remove unpack and repacking
     if msg["kind"].eq("user_init") {
         let id = msg["id"].as_i64().unwrap();
         let name = msg["username"].as_str().unwrap();
@@ -91,7 +90,7 @@ pub(crate) fn check_send_broadcast_messages(
                 for client in client_txs.iter() {
                     if client.tx.send(msg.clone()).is_err() {
                         server_state.lock().unwrap().remove_player(client.id);
-                        server_state.lock().unwrap().remove_client_tx(client.id);
+                        server_state.lock().unwrap().remove_client_tx(client);
                     }
                 }
             }

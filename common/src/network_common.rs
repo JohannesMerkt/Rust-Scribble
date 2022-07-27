@@ -11,6 +11,7 @@ use std::io::Write;
 use std::net::TcpStream;
 use x25519_dalek::{PublicKey, ReusableSecret};
 
+//TODO possibly make this a single cfg
 #[cfg(not(feature="no-encryption"))]
 use generic_array::GenericArray;
 #[cfg(not(feature="no-encryption"))]
@@ -206,7 +207,6 @@ pub fn send_message(net_info: &mut NetworkInfo, msg: &Value) -> Result<(), Error
 pub fn read_tcp_message(
     net_info: &mut NetworkInfo,
 ) -> Result<serde_json::Value, Box<dyn error::Error>> {
-    //TODO cleanup and generalize
 
     let mut size = [0; (usize::BITS / 8) as usize];
     let msg_size;

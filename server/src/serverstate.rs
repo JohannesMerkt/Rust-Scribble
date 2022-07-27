@@ -3,10 +3,12 @@ use parking_lot::{Condvar as PLCondvar, Mutex as PLMutex};
 use rand::Rng;
 use rust_scribble_common::messages_common::{GameStateUpdate, PlayersUpdate};
 use serde_json::{json, Value};
+use std::cmp::Ordering;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use std::collections::BTreeSet;
 
 use rust_scribble_common::gamestate_common::*;
 
@@ -22,6 +24,27 @@ impl ClientSendChannel {
         (ClientSendChannel { id, tx }, rx)
     }
 }
+
+impl Ord for ClientSendChannel {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.id.cmp(&other.id)
+    }
+}
+
+impl PartialOrd for ClientSendChannel {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for ClientSendChannel {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for ClientSendChannel {}
+
 
 pub struct ServerState {
     state: Arc<Mutex<ServerStateInner>>,
@@ -83,7 +106,7 @@ impl ServerState {
             pub fn set_ready(&mut self, player_id: i64, status: bool) -> bool;
             pub fn chat_or_guess(&mut self, player_id: i64, message: &String) -> bool;
             pub fn add_client_tx(&mut self, tx: ClientSendChannel);
-            pub fn remove_client_tx(&mut self, id: i64);
+            pub fn remove_client_tx(&mut self, tx: &ClientSendChannel);
             // start_game should not be accessible directly to keep the interface clean.
             // A countdown of 0 seconds can be used to start immediately
             // but the game is usually started with some small countdown instead
@@ -103,7 +126,7 @@ impl ServerState {
     pub fn tx(&self) -> mpsc::Sender<serde_json::Value> {
         self.state.lock().unwrap().tx.clone()
     }
-    pub fn client_tx(&self) -> Vec<ClientSendChannel> {
+    pub fn client_tx(&self) -> BTreeSet<ClientSendChannel> {
         self.state.lock().unwrap().client_tx.clone()
     }
 }
@@ -113,7 +136,7 @@ struct ServerStateInner {
     pub players: Arc<Mutex<Vec<Player>>>,
     pub word_list: Arc<Mutex<Vec<String>>>,
     pub tx: mpsc::Sender<serde_json::Value>,
-    pub client_tx: Vec<ClientSendChannel>,
+    pub client_tx: BTreeSet<ClientSendChannel>,
 }
 
 impl ServerStateInner {
@@ -123,16 +146,16 @@ impl ServerStateInner {
             players: Arc::new(Mutex::new(Vec::new())),
             word_list: Arc::new(Mutex::new(words)),
             tx,
-            client_tx: Vec::new(),
+            client_tx: BTreeSet::new(),
         }
     }
 
     pub fn add_client_tx(&mut self, tx: ClientSendChannel) {
-        self.client_tx.push(tx);
+        self.client_tx.insert(tx);
     }
 
-    pub fn remove_client_tx(&mut self, id: i64) {
-        self.client_tx.retain(|x| x.id != id);
+    pub fn remove_client_tx(&mut self, tx: &ClientSendChannel) {
+        self.client_tx.remove(&tx);
     }
 
     pub fn add_player(&mut self, id: i64, name: String) {
@@ -212,7 +235,7 @@ impl ServerStateInner {
         let mut game_state = self.game_state.lock().unwrap();
         let mut words = self.word_list.lock().unwrap();
         let word_index = rand::thread_rng().gen_range(0, words.len());
-        //Todo encrypt for player
+        // TODO get shared_key and encrypt word with it
         game_state.word = words[word_index].clone();
         game_state.word_length = words[word_index].len() as i64;
         words.remove(word_index);

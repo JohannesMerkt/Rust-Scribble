@@ -47,7 +47,6 @@ fn render_lobby_view(
     clientstate: &mut ResMut<ClientState>,
 ) {
     egui::SidePanel::right("side_panel").show(egui_context.ctx_mut(), |ui| {
-        ui.heading("Connected!");
         render_chat_area(ui, networkstate, clientstate);
         render_player_list(ui, clientstate);
 

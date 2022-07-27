@@ -47,9 +47,15 @@ fn render_lobby_view(
     clientstate: &mut ResMut<ClientState>,
 ) {
     egui::SidePanel::right("side_panel").show(egui_context.ctx_mut(), |ui| {
-        render_chat_area(ui, networkstate, clientstate);
+        render_game_time(ui, clientstate);
         render_player_list(ui, clientstate);
+        render_chat_area(ui, networkstate, clientstate);
 
+
+    });
+
+    egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
+        ui.label(egui::RichText::new("Lobby").font(egui::FontId::proportional(40.0)));
         if let Some(net_info) = networkstate.info.as_mut() {
             let player_result = clientstate
                 .players
@@ -66,10 +72,6 @@ fn render_lobby_view(
             }
         }
     });
-
-    egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
-        ui.label(egui::RichText::new("Lobby").font(egui::FontId::proportional(40.0)));
-    });
 }
 
 fn render_ingame_view(
@@ -78,8 +80,9 @@ fn render_ingame_view(
     clientstate: &mut ResMut<ClientState>,
 ) {
     egui::SidePanel::right("side_panel").show(egui_context.ctx_mut(), |ui| {
-        render_chat_area(ui, networkstate, clientstate);
+        render_game_time(ui, clientstate);
         render_player_list(ui, clientstate);
+        render_chat_area(ui, networkstate, clientstate);
 
         if ui.button("Disconnect").clicked() {
             network_plugin::send_disconnect(networkstate);
@@ -196,89 +199,101 @@ fn render_chat_area(
     networkstate: &mut ResMut<network_plugin::NetworkState>,
     clientstate: &mut ResMut<ClientState>,
 ) {
-    ui.heading("Chat");
-    let text_style = egui::TextStyle::Body;
-    let row_height = ui.text_style_height(&text_style);
-    egui::ScrollArea::vertical()
-        .auto_shrink([false; 2])
-        .stick_to_bottom()
-        .max_height(200.0)
-        .show_rows(ui, row_height, 100, |ui, _| {
-            for chat_message in clientstate.chat_messages.iter() {
-                let search_player_result = clientstate
-                    .players
-                    .par_iter()
-                    .find_any(|player| player.id == chat_message.id);
-                if let Some(player) = search_player_result {
-                    ui.label(format!("{}: {}", player.name, chat_message.message));
-                    ui.set_min_width(100.0);
+    ui.group(|ui| {
+        ui.heading("Chat");
+        let text_style = egui::TextStyle::Body;
+        let row_height = ui.text_style_height(&text_style);
+        egui::ScrollArea::vertical()
+            .auto_shrink([false; 2])
+            .stick_to_bottom()
+            .max_height(200.0)
+            .show_rows(ui, row_height, 100, |ui, _| {
+                for chat_message in clientstate.chat_messages.iter() {
+                    let search_player_result = clientstate
+                        .players
+                        .par_iter()
+                        .find_any(|player| player.id == chat_message.id);
+                    if let Some(player) = search_player_result {
+                        ui.label(format!("{}: {}", player.name, chat_message.message));
+                        ui.set_min_width(100.0);
+                    }
                 }
+            });
+        ui.horizontal(|ui| {
+            ui.label("Chat: ");
+            ui.text_edit_singleline(&mut clientstate.chat_message_input);
+            if ui.button("Send").clicked()
+                || (ui.input().key_pressed(egui::Key::Enter)
+                    && !clientstate.chat_message_input.is_empty())
+            {
+                network_plugin::send_chat_message(networkstate, clientstate.chat_message_input.clone());
+                clientstate.chat_message_input.clear();
             }
         });
-    ui.horizontal(|ui| {
-        ui.label("Chat: ");
-        ui.text_edit_singleline(&mut clientstate.chat_message_input);
-        if ui.button("Send").clicked()
-            || (ui.input().key_pressed(egui::Key::Enter)
-                && !clientstate.chat_message_input.is_empty())
-        {
-            network_plugin::send_chat_message(networkstate, clientstate.chat_message_input.clone());
-            clientstate.chat_message_input.clear();
-        }
     });
+
+}
+
+fn render_game_time(ui: &mut egui::Ui, clientstate: &mut ResMut<ClientState>) {
+    ui.group(|ui| {
+        ui.label(format!("Time: {}s", clientstate.game_state.time));
+    });
+    
 }
 
 fn render_player_list(ui: &mut egui::Ui, clientstate: &mut ResMut<ClientState>) {
-    let mut playing_count = 0;
-    let mut lobby_count = 0;
-    for player in &clientstate.players {
-        if player.playing {
-            playing_count += 1;
-        } else {
-            lobby_count += 1;
-        }
-    }
-    if playing_count > 0 {
-        ui.heading("Playing");
-        ui.columns(2, |cols| {
-            cols[0].label("Name");
-            cols[1].label("Status");
-        });
-        ui.separator();
+    ui.group(|ui| {
+        let mut playing_count = 0;
+        let mut lobby_count = 0;
         for player in &clientstate.players {
             if player.playing {
-                ui.columns(2, |cols| {
-                    cols[0].label(format!("{}",player.name));
-                    if player.drawing {
-                        cols[1].label("✏");
-                    } else if player.guessed_word {
-                        cols[1].label("✔");
-                    } else {
-                        cols[1].label("❓");
-                    }
-                });
+                playing_count += 1;
+            } else {
+                lobby_count += 1;
             }
         }
-    }
-    if lobby_count > 0 {
-        ui.heading("Waiting in Lobby");
-        ui.columns(2, |cols| {
-            cols[0].label("Name");
-            cols[1].label("Ready");
-        });
-        ui.separator();
-        for player in &clientstate.players {
-            if !player.playing {
-                ui.columns(2, |cols| {
-                    cols[0].label(format!("{}",player.name));
-                    if player.ready {
-                        cols[1].label("✔");
-                    } else {
-                        cols[1].label("✖");
-                    }
-                    
-                });
+        if playing_count > 0 {
+            ui.heading("Playing");
+            ui.columns(2, |cols| {
+                cols[0].label("Name");
+                cols[1].label("Status");
+            });
+            ui.separator();
+            for player in &clientstate.players {
+                if player.playing {
+                    ui.columns(2, |cols| {
+                        cols[0].label(format!("{}",player.name));
+                        if player.drawing {
+                            cols[1].label("✏");
+                        } else if player.guessed_word {
+                            cols[1].label("✔");
+                        } else {
+                            cols[1].label("❓");
+                        }
+                    });
+                }
             }
         }
-    }
+        if lobby_count > 0 {
+            ui.heading("Waiting in Lobby");
+            ui.columns(2, |cols| {
+                cols[0].label("Name");
+                cols[1].label("Ready");
+            });
+            ui.separator();
+            for player in &clientstate.players {
+                if !player.playing {
+                    ui.columns(2, |cols| {
+                        cols[0].label(format!("{}",player.name));
+                        if player.ready {
+                            cols[1].label("✔");
+                        } else {
+                            cols[1].label("✖");
+                        }
+                        
+                    });
+                }
+            }
+        }
+    });
 }

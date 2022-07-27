@@ -103,6 +103,7 @@ impl ServerState {
             pub fn add_player(&mut self, id: i64, name: String);
             pub fn remove_player(&mut self, player_id: i64);
             pub fn set_ready(&mut self, player_id: i64, status: bool) -> bool;
+            pub fn broadcast_chat_message(&mut self, player_id: i64, message: &String) -> bool;
             pub fn chat_or_guess(&mut self, player_id: i64, message: &String) -> bool;
             pub fn add_client_tx(&mut self, tx: ClientSendChannel);
             pub fn remove_client_tx(&mut self, tx: &ClientSendChannel);
@@ -201,6 +202,17 @@ impl ServerStateInner {
         } else {
             false
         }
+    }
+
+    pub fn broadcast_chat_message(&mut self, player_id: i64, message: &String) -> bool {
+        let mut broadcast_message = true;
+        {
+            let game_state = self.game_state.lock().unwrap();
+            if game_state.in_game && game_state.word.eq(message) {
+                broadcast_message = false;
+            }
+        }
+        broadcast_message
     }
 
     pub fn chat_or_guess(&mut self, player_id: i64, message: &String) -> bool {

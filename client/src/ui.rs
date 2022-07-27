@@ -48,7 +48,7 @@ fn render_lobby_view(
 ) {
     egui::SidePanel::right("side_panel").show(egui_context.ctx_mut(), |ui| {
         render_game_time(ui, clientstate);
-        render_player_list(ui, clientstate);
+        render_player_list(ui, networkstate, clientstate);
         render_chat_area(ui, networkstate, clientstate);
 
 
@@ -81,7 +81,7 @@ fn render_ingame_view(
 ) {
     egui::SidePanel::right("side_panel").show(egui_context.ctx_mut(), |ui| {
         render_game_time(ui, clientstate);
-        render_player_list(ui, clientstate);
+        render_player_list(ui, networkstate, clientstate);
         render_chat_area(ui, networkstate, clientstate);
 
         if ui.button("Disconnect").clicked() {
@@ -241,8 +241,9 @@ fn render_game_time(ui: &mut egui::Ui, clientstate: &mut ResMut<ClientState>) {
     
 }
 
-fn render_player_list(ui: &mut egui::Ui, clientstate: &mut ResMut<ClientState>) {
+fn render_player_list(ui: &mut egui::Ui, networkstate: &mut ResMut<network_plugin::NetworkState>, clientstate: &mut ResMut<ClientState>) {
     ui.group(|ui| {
+        let net_info = networkstate.info.as_ref().unwrap();
         let mut playing_count = 0;
         let mut lobby_count = 0;
         for player in &clientstate.players {
@@ -262,7 +263,11 @@ fn render_player_list(ui: &mut egui::Ui, clientstate: &mut ResMut<ClientState>) 
             for player in &clientstate.players {
                 if player.playing {
                     ui.columns(2, |cols| {
-                        cols[0].label(format!("{}",player.name));
+                        if net_info.id == player.id {
+                            cols[0].label(format!("{} (You)",player.name));
+                        } else {
+                            cols[0].label(format!("{}",player.name));
+                        }
                         if player.drawing {
                             cols[1].label("✏");
                         } else if player.guessed_word {
@@ -284,7 +289,11 @@ fn render_player_list(ui: &mut egui::Ui, clientstate: &mut ResMut<ClientState>) 
             for player in &clientstate.players {
                 if !player.playing {
                     ui.columns(2, |cols| {
-                        cols[0].label(format!("{}",player.name));
+                        if net_info.id == player.id {
+                            cols[0].label(format!("{} (You)",player.name));
+                        } else {
+                            cols[0].label(format!("{}",player.name));
+                        }
                         if player.ready {
                             cols[1].label("✔");
                         } else {

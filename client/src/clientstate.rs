@@ -8,9 +8,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub struct ClientState {
     /// the clients stroke settings for drawing
-    pub stroke: Stroke,
+    pub current_stroke: Stroke,
     /// the lines on the canvas
     pub lines: Vec<Line>,
+    pub eraser_active: bool,
     /// clients text in the input field of the chat section
     pub chat_message_input: String,
     /// all messages in chat
@@ -24,8 +25,9 @@ pub struct ClientState {
 impl Default for ClientState {
     fn default() -> Self {
         ClientState {
-            stroke: Stroke::new(10., Color32::RED),
+            current_stroke: Stroke::new(10., Color32::RED),
             lines: Vec::new(),
+            eraser_active: false,
             chat_message_input: String::new(),
             chat_messages: Vec::new(),
             game_state: GameState::default(),

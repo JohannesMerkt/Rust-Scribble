@@ -11,7 +11,6 @@ pub struct ClientState {
     pub current_stroke: Stroke,
     /// the lines on the canvas
     pub lines: Vec<Line>,
-    pub eraser_active: bool,
     /// clients text in the input field of the chat section
     pub chat_message_input: String,
     /// all messages in chat
@@ -27,7 +26,6 @@ impl Default for ClientState {
         ClientState {
             current_stroke: Stroke::new(10., Color32::RED),
             lines: Vec::new(),
-            eraser_active: false,
             chat_message_input: String::new(),
             chat_messages: Vec::new(),
             game_state: GameState::default(),

@@ -3,7 +3,7 @@ use std::thread::current;
 use bevy::prelude::*;
 use bevy::render::color;
 use bevy_egui::{egui, EguiContext};
-use egui::{Stroke, Color32, Rounding};
+use egui::{Stroke, Color32, Rounding, RichText, Visuals};
 use rayon::prelude::*;
 use regex::Regex;
 
@@ -132,26 +132,34 @@ fn render_ingame_view(
             ui.label("Paint the word with mouse/touch!".to_string());
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.horizontal(|ui| {
+                let colors: Vec<Color32> = vec![Color32::YELLOW, Color32::from_rgb(255, 165, 0), Color32::RED, Color32::from_rgb(255, 192, 203), Color32::GREEN, Color32::BLUE, Color32::BROWN, Color32::BLACK];
+                let color_chunks = colors.chunks(colors.len()/2);
+
+                ui.vertical(|ui| {
+                    for color_row in color_chunks {
+                        ui.horizontal(|ui|{
+                            for color in color_row {
+                                ui.selectable_value(&mut clientstate.current_stroke.color, *color, RichText::new("🔴").color(*color));
+                            }
+                        });
+                    }
+                });
+
                 ui.add(
                     egui::Slider::new(&mut clientstate.current_stroke.width, 1.0..=10.0)
                         .text("width"),
                 );
-                if ui
-                    .color_edit_button_srgba(&mut clientstate.current_stroke.color)
-                    .clicked()
-                {
-                    clientstate.eraser_active = false;
-                }
 
-                if ui.button("Eraser").clicked() {
-                    clientstate.eraser_active = true;
-                }
+                ui.selectable_value(&mut clientstate.current_stroke.color, Color32::WHITE, "Eraser");
+
+               
                 // Preview for color and width of stroke
                 let (_id, stroke_rect) = ui.allocate_space(ui.spacing().interact_size);
-                let left = stroke_rect.left_center();
-                let right = stroke_rect.right_center();
+                let center_pos = stroke_rect.center();
+                // let right = stroke_rect.right_center();
                 ui.painter()
-                    .line_segment([left, right], clientstate.current_stroke);
+                    .circle_filled(center_pos, clientstate.current_stroke.width, clientstate.current_stroke.color);
+
                 ui.separator();
                 ui.label(
                     egui::RichText::new(format!("Word: {}", clientstate.game_state.word))
@@ -182,10 +190,9 @@ fn render_ingame_view(
 
             if is_drawer {
                 if response.drag_started() {
-                    let line_color = if clientstate.eraser_active { Color32::WHITE } else { clientstate.current_stroke.color };
                     let new_line = Line {
                         positions: vec![],
-                        stroke: Stroke::new(clientstate.current_stroke.width, line_color),
+                        stroke: clientstate.current_stroke,
                     };
                     clientstate.lines.push(new_line);
                 };

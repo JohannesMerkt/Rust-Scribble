@@ -9,10 +9,7 @@ use bevy_egui::EguiPlugin;
 
 fn main() {
     App::new()
-        .insert_resource(WindowDescriptor {
-            title: "Rust Scribble".to_string(),
-            ..default()
-        })
+        .insert_resource(ClearColor(Color::rgb(0.4, 0.4, 0.4)))
         .add_plugins(DefaultPlugins)
         .add_plugin(EguiPlugin)
         .add_plugin(clientstate::ClientStatePlugin)

@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 pub struct ClientState {
     /// the clients stroke settings for drawing
     pub current_stroke: Stroke,
+    pub current_line: Option<Line>,
     /// the lines on the canvas
     pub lines: Vec<Line>,
     /// clients text in the input field of the chat section
@@ -25,11 +26,12 @@ impl Default for ClientState {
     fn default() -> Self {
         ClientState {
             current_stroke: Stroke::new(10., Color32::RED),
+            current_line: Option::None,
             lines: Vec::new(),
             chat_message_input: String::new(),
             chat_messages: Vec::new(),
             game_state: GameState::default(),
-            players: Vec::new(),
+            players: Vec::new()
         }
     }
 }

@@ -95,9 +95,23 @@ pub fn send_disconnect(networkstate: &mut ResMut<NetworkState>) {
 /// * `networkstate` - Holding information about the connection to a server
 /// * `line` - The line to send to the server
 ///
-pub fn send_line(networkstate: &mut ResMut<NetworkState>, line: &mut Line) {
+pub fn send_line(networkstate: &mut ResMut<NetworkState>, line: &Line) {
     if let Some(network_info) = networkstate.info.as_mut() {
         let msg = json!(PaintingUpdate::new(network_info.id, line.clone()));
+        let _ = send_message(network_info, &msg);
+    }
+}
+
+pub fn delete_all_lines(networkstate: &mut ResMut<NetworkState>) {
+    if let Some(network_info) = networkstate.info.as_mut() {
+        let msg = json!(PaintingUpdate::clear_all(network_info.id));
+        let _ = send_message(network_info, &msg);
+    }
+}
+
+pub fn delete_last_line(networkstate: &mut ResMut<NetworkState>) {
+    if let Some(network_info) = networkstate.info.as_mut() {
+        let msg = json!(PaintingUpdate::clear_last(network_info.id));
         let _ = send_message(network_info, &msg);
     }
 }
@@ -134,8 +148,12 @@ fn handle_messsages(network_info: &mut NetworkInfo, clientstate: &mut ClientStat
             } else if m["kind"].eq("add_line") {
                 if let Ok(line) = serde_json::from_str(&m["line"].to_string()) {
                     let length = clientstate.lines.len();
-                    clientstate.lines.insert(length - 1, line);
+                    clientstate.lines.insert(length, line);
                 }
+            } else if m["kind"].eq("clear_all_lines") {
+                clientstate.lines = Vec::new();
+            } else if m["kind"].eq("clear_last_line") {
+                clientstate.lines.pop();
             }
         }
     }

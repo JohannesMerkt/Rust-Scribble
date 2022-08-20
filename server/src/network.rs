@@ -61,6 +61,12 @@ fn handle_message(msg: serde_json::Value, server_state: &mut ServerState) -> Vec
         }
     } else if msg["kind"].eq("add_line") {
         msg_to_send.push(msg);
+    } else if msg["kind"].eq("clear_all_lines") {
+        msg_to_send.push(msg);
+    } else if msg["kind"].eq("clear_last_line") {
+        msg_to_send.push(msg);
+    }else if msg["kind"].eq("other"){
+
     } else if msg["kind"].eq("disconnect") {
         let id = msg["id"].as_i64().unwrap();
         server_state.remove_player(id);

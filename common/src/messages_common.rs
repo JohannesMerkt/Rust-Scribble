@@ -103,4 +103,20 @@ impl PaintingUpdate {
             line: json!(line),
         }
     }
+
+    pub fn clear_all(id: i64) -> Self {
+        PaintingUpdate {
+            kind: "clear_all_lines".to_string(),
+            id,
+            line: Value::Null,
+        }
+    }
+
+    pub fn clear_last(id: i64) -> Self {
+        PaintingUpdate {
+            kind: "clear_last_line".to_string(),
+            id,
+            line: Value::Null,
+        }
+    }
 }

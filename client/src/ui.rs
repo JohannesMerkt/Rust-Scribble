@@ -1,14 +1,17 @@
 use std::thread::current;
 
+use bevy::ecs::system::Command;
 use bevy::prelude::*;
 use bevy::render::color;
 use bevy_egui::{egui, EguiContext};
-use egui::{Stroke, Color32, Rounding, RichText, Visuals};
+use egui::epaint::Shadow;
+use egui::style::{Selection, WidgetVisuals, Widgets, self};
+use egui::{vec2, Color32, ColorImage, ImageData, RichText, Rounding, Stroke, Vec2, Visuals};
 use rayon::prelude::*;
 use regex::Regex;
 
 use crate::clientstate::ClientState;
-use crate::network_plugin;
+use crate::{network_plugin, Textures};
 use rust_scribble_common::gamestate_common::*;
 
 /// this system handles rendering the ui
@@ -22,9 +25,10 @@ pub fn render_ui(
     mut egui_context: ResMut<EguiContext>,
     mut networkstate: ResMut<network_plugin::NetworkState>,
     mut clientstate: ResMut<ClientState>,
+    textures: Res<Textures>,
 ) {
     if networkstate.info.is_none() {
-        render_connect_view(&mut egui_context, &mut networkstate);
+        render_connect_view(&mut egui_context, &mut networkstate, &textures);
     } else if clientstate.game_state.in_game {
         render_ingame_view(&mut egui_context, &mut networkstate, &mut clientstate);
     } else {
@@ -41,19 +45,24 @@ pub fn render_ui(
 fn render_connect_view(
     egui_context: &mut ResMut<EguiContext>,
     networkstate: &mut ResMut<network_plugin::NetworkState>,
+    textures: &Res<Textures>,
 ) {
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
-        ui.heading("Rust Scribble:");
-        ui.label("Name");
-        ui.text_edit_singleline(&mut networkstate.name);
-        ui.label("Server Address");
-        ui.text_edit_singleline(&mut networkstate.address);
-        ui.label("Server Port");
-        ui.add(egui::widgets::DragValue::new(&mut networkstate.port).speed(1.0));
-        if ui.button("Connect").clicked() || ui.input().key_pressed(egui::Key::Enter) {
-            // connect to the server
-            network_plugin::connect(networkstate);
-        }
+        ui.vertical_centered(|ui| {
+            ui.add_space(100.0);
+            ui.image(textures.crab, 0.2 * vec2(1200.0, 800.0));
+            ui.heading("Rust Scribble:");
+            ui.label("Name");
+            ui.text_edit_singleline(&mut networkstate.name);
+            ui.label("Server Address");
+            ui.text_edit_singleline(&mut networkstate.address);
+            ui.label("Server Port");
+            ui.add(egui::widgets::DragValue::new(&mut networkstate.port).speed(1.0));
+            if ui.button("Connect").clicked() || ui.input().key_pressed(egui::Key::Enter) {
+                // connect to the server
+                network_plugin::connect(networkstate);
+            }
+        });
     });
 }
 
@@ -132,33 +141,64 @@ fn render_ingame_view(
             ui.label("Paint the word with mouse/touch!".to_string());
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.horizontal(|ui| {
-                let colors: Vec<Color32> = vec![Color32::YELLOW, Color32::from_rgb(255, 165, 0), Color32::RED, Color32::from_rgb(255, 192, 203), Color32::GREEN, Color32::BLUE, Color32::BROWN, Color32::BLACK];
-                let color_chunks = colors.chunks(colors.len()/2);
-
-                ui.vertical(|ui| {
-                    for color_row in color_chunks {
-                        ui.horizontal(|ui|{
-                            for color in color_row {
-                                ui.selectable_value(&mut clientstate.current_stroke.color, *color, RichText::new("🔴").color(*color));
-                            }
-                        });
-                    }
+                let colors: Vec<Color32> = vec![
+                    Color32::YELLOW,
+                    Color32::from_rgb(255, 165, 0),
+                    Color32::RED,
+                    Color32::from_rgb(255, 192, 203),
+                    Color32::GREEN,
+                    Color32::BLUE,
+                    Color32::BROWN,
+                    Color32::BLACK,
+                ];
+                let color_chunks = colors.chunks(colors.len() / 2);
+                ui.group(|ui| {
+                    ui.vertical(|ui| {
+                        for color_row in color_chunks {
+                            ui.horizontal(|ui| {
+                                for color in color_row {
+                                    ui.selectable_value(
+                                        &mut clientstate.current_stroke.color,
+                                        *color,
+                                        RichText::new("🔴").color(*color),
+                                    );
+                                }
+                            });
+                        }
+                    });
                 });
 
-                ui.add(
-                    egui::Slider::new(&mut clientstate.current_stroke.width, 1.0..=10.0)
-                        .text("width"),
+                ui.vertical(|ui| {
+                    ui.label(RichText::new("width").strong());
+                    ui.add(egui::Slider::new(
+                        &mut clientstate.current_stroke.width,
+                        1.0..=10.0,
+                    ));
+                });
+
+                if ui.button("X").on_hover_text("Erase all Lines").clicked() {
+                    network_plugin::delete_all_lines(networkstate);
+                };
+
+                if ui.button("↻").on_hover_text("Erase last line").clicked() {
+                    network_plugin::delete_last_line(networkstate);
+                };
+
+                ui.selectable_value(
+                    &mut clientstate.current_stroke.color,
+                    Color32::WHITE,
+                    "Eraser",
                 );
 
-                ui.selectable_value(&mut clientstate.current_stroke.color, Color32::WHITE, "Eraser");
-
-               
                 // Preview for color and width of stroke
                 let (_id, stroke_rect) = ui.allocate_space(ui.spacing().interact_size);
                 let center_pos = stroke_rect.center();
                 // let right = stroke_rect.right_center();
-                ui.painter()
-                    .circle_filled(center_pos, clientstate.current_stroke.width, clientstate.current_stroke.color);
+                ui.painter().circle_filled(
+                    center_pos,
+                    clientstate.current_stroke.width,
+                    clientstate.current_stroke.color,
+                );
 
                 ui.separator();
                 ui.label(
@@ -190,28 +230,29 @@ fn render_ingame_view(
 
             if is_drawer {
                 if response.drag_started() {
-                    let new_line = Line {
+                    clientstate.current_line = Option::Some(Line {
                         positions: vec![],
                         stroke: clientstate.current_stroke,
-                    };
-                    clientstate.lines.push(new_line);
-                };
+                    });
 
+                };
+                
                 if let Some(pointer_pos) = response.interact_pointer_pos() {
-                    let current_line = clientstate.lines.last_mut().unwrap();
-                    let canvas_pos = from_screen * pointer_pos;
-                    if current_line.positions.last() != Some(&canvas_pos) {
-                        current_line.positions.push(canvas_pos);
-                        response.mark_changed();
+                    if let Some(unw_current_line) = clientstate.current_line.as_mut() {
+                        let canvas_pos = from_screen * pointer_pos;
+                        if unw_current_line.positions.last() != Some(&canvas_pos) {
+                            unw_current_line.positions.push(canvas_pos);
+                            response.mark_changed();
+                        }
                     }
                 }
                 if response.drag_released() {
-                    let current_line = clientstate.lines.last_mut().unwrap();
-                    network_plugin::send_line(networkstate, current_line);
+                    network_plugin::send_line(networkstate, clientstate.current_line.as_ref().unwrap());
+                    clientstate.current_line = Option::None;
                 }
             }
             let mut shapes = vec![];
-            for line in &clientstate.lines {
+            for line in clientstate.lines.iter().chain(clientstate.current_line.iter()) {
                 if line.positions.len() >= 2 {
                     let points: Vec<egui::Pos2> =
                         line.positions.par_iter().map(|p| to_screen * *p).collect();
@@ -230,7 +271,7 @@ fn render_ingame_view(
 /// * `ui` - The current UI context to draw the chat area on
 /// * `networkstate` - Holding information about the connection to a server
 /// * `clientstate` - The state of the client holding information about the gamestate, canvas lines, chat messages and players in the game
-///
+
 fn render_chat_area(
     ui: &mut egui::Ui,
     networkstate: &mut ResMut<network_plugin::NetworkState>,

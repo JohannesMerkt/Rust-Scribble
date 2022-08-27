@@ -36,7 +36,7 @@ impl ServerState {
 
             // no spurious wakeups in parking_lot cvars
             cvar.wait_for(&mut started, Duration::from_secs(secs));
-            if !(*started) {
+            if !(*started) && local_state.lock().unwrap().all_ready() {
                 local_state.lock().unwrap().start_game();
                 *started = true;
                 let _ = tx.send(json!(GameStateUpdate::new(

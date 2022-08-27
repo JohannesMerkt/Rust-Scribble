@@ -125,9 +125,6 @@ pub fn delete_last_line(networkstate: &mut ResMut<NetworkState>) {
 fn handle_messsages(network_info: &mut NetworkInfo, clientstate: &mut ClientState) {
     if let Ok(msg) = network::read_messages(network_info, 5) {
         for m in msg {
-            println!("{}", m);
-            println!("{}", m["kind"]);
-
             if m["kind"].eq("chat_message") {
                 let message = m["message"].as_str().unwrap();
                 let player_id = m["id"].as_i64().unwrap();

@@ -255,7 +255,6 @@ impl ServerStateInner {
         let mut game_state = self.game_state.lock().unwrap();
         let mut words = self.word_list.lock().unwrap();
         let word_index = rand::thread_rng().gen_range(0, words.len());
-        // TODO get shared_key and encrypt word with it
         game_state.word = words[word_index].clone();
         game_state.word_length = words[word_index].len() as i64;
         words.remove(word_index);

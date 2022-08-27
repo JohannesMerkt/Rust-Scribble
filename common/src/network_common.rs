@@ -128,7 +128,6 @@ pub fn decrypt_message(
     {
         let ciphertext = &msg_buf[12..msg_size - 4];
         let result: Result<Value, serde_json::Error> = serde_json::from_slice(&ciphertext);
-        println!("{:?}", result);
         json_message = result?;
     }
 

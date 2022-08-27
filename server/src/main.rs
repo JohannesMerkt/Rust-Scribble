@@ -26,12 +26,11 @@ struct Args {
 }
 
 /// Main function for the server.
-/// 
+///
 fn main() {
     let args = Args::parse();
 
     let words = read_words_from_file(args.words);
-    println!("{:?}", words);
 
     tcp_server(args.port, words);
 }

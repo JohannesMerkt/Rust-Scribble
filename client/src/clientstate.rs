@@ -31,7 +31,7 @@ impl Default for ClientState {
             chat_message_input: String::new(),
             chat_messages: Vec::new(),
             game_state: GameState::default(),
-            players: Vec::new()
+            players: Vec::new(),
         }
     }
 }

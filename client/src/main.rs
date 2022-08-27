@@ -5,8 +5,11 @@ mod network_plugin;
 mod ui;
 
 use bevy::prelude::*;
-use bevy_egui::{EguiPlugin, EguiContext};
-use egui::{TextureId, Visuals, style::{Widgets, WidgetVisuals}, Color32, Stroke, Rounding};
+use bevy_egui::{EguiContext, EguiPlugin};
+use egui::{
+    style::{WidgetVisuals, Widgets},
+    Color32, Rounding, Stroke, TextureId, Visuals,
+};
 
 fn main() {
     App::new()
@@ -27,13 +30,17 @@ fn main() {
 }
 
 pub struct Textures {
-    crab: TextureId
+    crab: TextureId,
 }
 
-fn load_images(mut commands: Commands, asset_server: ResMut<AssetServer>, mut egui_context: ResMut<EguiContext>) {
+fn load_images(
+    mut commands: Commands,
+    asset_server: ResMut<AssetServer>,
+    mut egui_context: ResMut<EguiContext>,
+) {
     let crab_handle: Handle<Image> = asset_server.load("rustacean-flat-happy.png");
     let textures = Textures {
-        crab: egui_context.add_image(crab_handle)
+        crab: egui_context.add_image(crab_handle),
     };
     commands.insert_resource(textures);
 }
@@ -47,7 +54,7 @@ fn configure_visuals(mut egui_context: ResMut<EguiContext>) {
                 bg_stroke: Stroke::new(1.0, Color32::from_gray(190)), // separators, indentation lines, windows outlines
                 fg_stroke: Stroke::new(1.0, Color32::from_gray(80)),  // normal text color
                 rounding: Rounding::same(2.0),
-                expansion: 0.0
+                expansion: 0.0,
             },
             ..Widgets::light()
         },

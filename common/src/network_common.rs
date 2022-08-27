@@ -160,6 +160,7 @@ fn pack_network_message(msg_size: usize, nonce: Nonce, ciphertext: Vec<u8>) -> V
 ///
 /// # Returns
 /// * `true` - If there are messages waiting to be read.
+/// * `false` - If there are no messages waiting to be read.
 ///
 /// This function should be used in a thread to force updates as soon as a message is waiting to be read.
 ///

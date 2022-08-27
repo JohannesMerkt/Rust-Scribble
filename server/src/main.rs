@@ -25,6 +25,8 @@ struct Args {
     words: String,
 }
 
+/// Main function for the server.
+/// 
 fn main() {
     let args = Args::parse();
 
@@ -72,6 +74,7 @@ pub fn tcp_server(port: u16, words: Vec<String>) {
     // Spawn a new for handling broadcast messages
     thread::spawn(move || network::check_send_broadcast_messages(broadcast_server_state, rx));
 
+    //Main Server loop - accept connections and spawn a new thread for each one
     loop {
         let (public_key, secret_key) = generate_keypair();
         let (mut tcp_stream, addr) = listener.accept().unwrap();

@@ -1,12 +1,6 @@
-use std::thread::current;
-
-use bevy::ecs::system::Command;
 use bevy::prelude::*;
-use bevy::render::color;
 use bevy_egui::{egui, EguiContext};
-use egui::epaint::Shadow;
-use egui::style::{Selection, WidgetVisuals, Widgets, self};
-use egui::{vec2, Color32, ColorImage, ImageData, RichText, Rounding, Stroke, Vec2, Visuals};
+use egui::{vec2, Color32, RichText, Rounding};
 use rayon::prelude::*;
 use regex::Regex;
 
@@ -234,9 +228,8 @@ fn render_ingame_view(
                         positions: vec![],
                         stroke: clientstate.current_stroke,
                     });
-
                 };
-                
+
                 if let Some(pointer_pos) = response.interact_pointer_pos() {
                     if let Some(unw_current_line) = clientstate.current_line.as_mut() {
                         let canvas_pos = from_screen * pointer_pos;
@@ -247,12 +240,19 @@ fn render_ingame_view(
                     }
                 }
                 if response.drag_released() {
-                    network_plugin::send_line(networkstate, clientstate.current_line.as_ref().unwrap());
+                    network_plugin::send_line(
+                        networkstate,
+                        clientstate.current_line.as_ref().unwrap(),
+                    );
                     clientstate.current_line = Option::None;
                 }
             }
             let mut shapes = vec![];
-            for line in clientstate.lines.iter().chain(clientstate.current_line.iter()) {
+            for line in clientstate
+                .lines
+                .iter()
+                .chain(clientstate.current_line.iter())
+            {
                 if line.positions.len() >= 2 {
                     let points: Vec<egui::Pos2> =
                         line.positions.par_iter().map(|p| to_screen * *p).collect();

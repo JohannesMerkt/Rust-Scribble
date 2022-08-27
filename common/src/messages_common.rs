@@ -4,11 +4,8 @@ use serde_json::{json, Value};
 
 #[derive(Serialize, Deserialize)]
 pub struct ChatMessage {
-    /// kind of message
     pub kind: String,
-    /// id of player who sent the message
-    pub id: i64, // TODO use smaller number? u8 ?
-    /// the message the player has sent
+    pub id: i64,
     pub message: String,
 }
 

@@ -20,6 +20,9 @@ const DELAY_BEFORE_GAME_START: u64 = 5;
 /// * `game_state` - The current game_state which can be updated if necessary.
 /// * `lobby_state` - The lobby state which can be updated if necessary.
 /// * `tx` - The channel to send broadcast messages to, that will then send to all clients.
+/// 
+/// # Returns
+/// * `Vector<Value>` - A vector of JSON value messages.
 ///
 fn handle_message(msg: serde_json::Value, server_state: &mut ServerState) -> Vec<Value> {
     println!("RCV: {:?}", msg);
@@ -59,15 +62,7 @@ fn handle_message(msg: serde_json::Value, server_state: &mut ServerState) -> Vec
         } else {
             msg_to_send.push(msg);
         }
-    } else if msg["kind"].eq("add_line") {
-        msg_to_send.push(msg);
-    } else if msg["kind"].eq("clear_all_lines") {
-        msg_to_send.push(msg);
-    } else if msg["kind"].eq("clear_last_line") {
-        msg_to_send.push(msg);
-    }else if msg["kind"].eq("other"){
-
-    } else if msg["kind"].eq("disconnect") {
+    }  else if msg["kind"].eq("disconnect") {
         let id = msg["id"].as_i64().unwrap();
         server_state.remove_player(id);
         msg_to_send.push(json!(PlayersUpdate::new(
@@ -193,8 +188,7 @@ pub(crate) fn handle_client(
     let mut keepalive = Instant::now();
     let player_id = net_info.id;
 
-    //Start of the main loop to read messages and send keepalive pings
-    //TODO ideally this would be done async or something cleaner
+    //Start of the main loop to read messages and send keep-alive pings
     loop {
         if let Ok(msg) = read_tcp_message(&mut net_info) {
             let _ = tx.send(msg);

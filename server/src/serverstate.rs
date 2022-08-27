@@ -97,6 +97,11 @@ impl ServerState {
     }
 }
 
+/// The internal state of the server.
+///
+/// This is the state that is shared between the server and the game logic.
+/// The game logic is responsible for updating the state and the server is responsible for sending updates to the clients.
+///
 struct ServerStateInner {
     pub game_state: Arc<Mutex<GameState>>,
     pub players: Arc<Mutex<Vec<Player>>>,
@@ -106,6 +111,11 @@ struct ServerStateInner {
 }
 
 impl ServerStateInner {
+    /// Creates a new ServerStateInner with the given word list and tx.
+    ///
+    /// # Arguments
+    ///     * `words` - The vector word list to use for the game.
+    ///    * `tx` - The tx mpsc to send updates to the clients.
     pub fn default(words: Vec<String>, tx: mpsc::Sender<serde_json::Value>) -> Self {
         ServerStateInner {
             game_state: Arc::new(Mutex::new(GameState::default())),
@@ -116,19 +126,40 @@ impl ServerStateInner {
         }
     }
 
+    /// Adds a player to the game.
+    ///
+    /// # Arguments
+    ///    * `id` - The id of the player.
+    ///   * `tx` - The tx mpsc to send updates to the clients.
     pub fn add_client_tx(&mut self, id: i64, tx: mpsc::Sender<Value>) {
         self.client_tx.insert(id, tx);
     }
 
+    /// Removes a client tx from the game and removes the player id.
+    ///
+    /// # Arguments
+    ///   * `id` - The id of the player.
+    ///
     pub fn remove_client_tx(&mut self, id: i64) {
         self.remove_player(id);
         self.client_tx.remove(&id);
     }
 
+    /// Adds a player to the game.
+    ///
+    /// # Arguments
+    ///   * `id` - The id of the player.
+    ///   * `name` - The name of the player.
+    ///
     pub fn add_player(&mut self, id: i64, name: String) {
         self.players.lock().unwrap().push(Player::new(id, name));
     }
 
+    /// Removes a player from the game.
+    ///
+    /// # Arguments
+    ///  * `id` - The id of the player.
+    ///
     pub fn remove_player(&mut self, player_id: i64) {
         // leave ingame when player is drawer
         let mut end_game = false;
@@ -154,6 +185,7 @@ impl ServerStateInner {
         }
     }
 
+    /// Check if all players are ready.
     fn all_ready(&self) -> bool {
         self.players
             .lock()
@@ -162,6 +194,12 @@ impl ServerStateInner {
             .all(|player| player.ready)
     }
 
+    /// Set the ready status of a player.
+    ///
+    /// # Arguments
+    ///   * `player_id` - The id of the player.
+    ///  * `status` - The new ready status.
+    ///
     pub fn set_ready(&mut self, player_id: i64, status: bool) -> bool {
         //Set player with player_id to ready
         let mut players = self.players.lock().unwrap();
@@ -173,6 +211,11 @@ impl ServerStateInner {
         self.all_ready()
     }
 
+    /// Check if all players have guessed the word.
+    ///
+    /// # Returns
+    ///  * `true` - If all players have guessed the word.
+    /// * `false` - If not all players have guessed the word.
     pub fn all_guessed(&mut self) -> bool {
         if self.players.lock().unwrap().iter().all(|player| {
             !player.drawing && player.guessed_word || player.drawing && !player.guessed_word
@@ -183,6 +226,12 @@ impl ServerStateInner {
         false
     }
 
+    /// Check if the message received from the client is a valid guess or chat message.
+    ///
+    /// # Arguments
+    ///  * `player_id` - The id of the player.
+    ///  * `message` - The message received from the client.
+    ///
     pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> bool {
         let game_state = self.game_state.lock().unwrap();
         let mut players = self.players.lock().unwrap();
@@ -198,6 +247,10 @@ impl ServerStateInner {
         false
     }
 
+    /// Gets a new random word from the word list and removes it from the word list.
+    ///
+    /// # Returns
+    /// * `word` - The new random word.
     fn get_random_word(&mut self) {
         let mut game_state = self.game_state.lock().unwrap();
         let mut words = self.word_list.lock().unwrap();
@@ -208,6 +261,7 @@ impl ServerStateInner {
         words.remove(word_index);
     }
 
+    /// Starts a new game.
     pub fn start_game(&mut self) {
         println!("Starting Game");
         self.get_random_word();
@@ -228,6 +282,7 @@ impl ServerStateInner {
         }
     }
 
+    /// Ends the game.
     fn end_game(&mut self) {
         let mut game_state = self.game_state.lock().unwrap();
         let mut players = self.players.lock().unwrap();

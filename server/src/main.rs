@@ -1,9 +1,10 @@
 #![crate_name = "rust_scribble_server"]
 mod network;
+mod lobbystate;
 mod serverstate;
 
 use crate::network::handle_client;
-use crate::serverstate::ServerState;
+use crate::lobbystate::LobbyState;
 use chacha20poly1305::Key;
 use clap::Parser;
 use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
@@ -63,15 +64,15 @@ pub fn tcp_server(port: u16, words: Vec<String>) {
     let listener = TcpListener::bind(socket).unwrap();
 
     println!("Listening on {}", socket);
-    let (tx, rx) = mpsc::channel();
+    let (server_tx, server_rx) = mpsc::channel();
     let mut next_client_id: i64 = 1;
 
-    let server_state = Arc::new(Mutex::new(ServerState::default(words, tx.clone())));
+    let lobby = Arc::new(Mutex::new(LobbyState::default(words, server_tx.clone())));
     //Add words to server state
-    let broadcast_server_state = Arc::clone(&server_state);
+    let broadcast_server_state = Arc::clone(&lobby);
 
-    // Spawn a new for handling broadcast messages
-    thread::spawn(move || network::check_send_broadcast_messages(broadcast_server_state, rx));
+    // Spawn a new thread for handling broadcast messages
+    thread::spawn(move || network::check_send_broadcast_messages(broadcast_server_state, server_rx));
 
     //Main Server loop - accept connections and spawn a new thread for each one
     loop {
@@ -91,8 +92,8 @@ pub fn tcp_server(port: u16, words: Vec<String>) {
             };
 
             let (client_tx, thread_rx) = mpsc::channel();
-            let thread_tx = tx.clone();
-            server_state
+            let thread_tx = server_tx.clone();
+            lobby
                 .lock()
                 .unwrap()
                 .add_client_tx(next_client_id, client_tx);

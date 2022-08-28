@@ -9,7 +9,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 use x25519_dalek::PublicKey;
 
-use crate::serverstate::ServerState;
+use crate::lobbystate::LobbyState;
 
 const DELAY_BEFORE_GAME_START: u64 = 5;
 
@@ -24,7 +24,7 @@ const DELAY_BEFORE_GAME_START: u64 = 5;
 /// # Returns
 /// * `Vector<Value>` - A vector of JSON value messages.
 ///
-fn handle_message(msg: serde_json::Value, server_state: &mut ServerState) -> Vec<Value> {
+fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> {
     let mut msg_to_send: Vec<Value> = vec![];
 
     let send_update = !msg["kind"].eq("update");
@@ -32,27 +32,27 @@ fn handle_message(msg: serde_json::Value, server_state: &mut ServerState) -> Vec
     if msg["kind"].eq("user_init") {
         let id = msg["id"].as_i64().unwrap();
         let name = msg["username"].as_str().unwrap();
-        server_state.add_player(id, name.to_string());
+        lobby.add_player(id, name.to_string());
         msg_to_send.push(json!(PlayersUpdate::new(
-            server_state.players().lock().unwrap().to_vec()
+            lobby.players().lock().unwrap().to_vec()
         )));
     } else if msg["kind"].eq("ready") {
         let id = msg["id"].as_i64().unwrap();
         let status = msg["ready"].as_bool().unwrap();
-        if server_state.set_ready(id, status) {
-            server_state.start_game_on_timer(DELAY_BEFORE_GAME_START);
+        if lobby.set_ready(id, status) {
+            lobby.start_game_on_timer(DELAY_BEFORE_GAME_START);
         }
         msg_to_send.push(json!(PlayersUpdate::new(
-            server_state.players().lock().unwrap().to_vec()
+            lobby.players().lock().unwrap().to_vec()
         )));
     } else if msg["kind"].eq("chat_message") {
-        if server_state.chat_or_correct_guess(
+        if lobby.chat_or_correct_guess(
             msg["id"].as_i64().unwrap(),
             msg["message"].as_str().unwrap(),
         ) {
-            if server_state.all_guessed() {
+            if lobby.all_guessed() {
                 //needed to allow timer to start game again
-                server_state.end_game();
+                lobby.end_game();
             }
             msg_to_send.push(json!(ChatMessage::new(
                 msg["id"].as_i64().unwrap(),
@@ -63,9 +63,9 @@ fn handle_message(msg: serde_json::Value, server_state: &mut ServerState) -> Vec
         }
     } else if msg["kind"].eq("disconnect") {
         let id = msg["id"].as_i64().unwrap();
-        server_state.remove_player(id);
+        lobby.remove_player(id);
         msg_to_send.push(json!(PlayersUpdate::new(
-            server_state.players().lock().unwrap().to_vec()
+            lobby.players().lock().unwrap().to_vec()
         )));
     } else {
         msg_to_send.push(msg);
@@ -73,10 +73,10 @@ fn handle_message(msg: serde_json::Value, server_state: &mut ServerState) -> Vec
 
     if send_update {
         msg_to_send.push(json!(GameStateUpdate::new(
-            server_state.game_state().lock().unwrap().clone()
+            lobby.game_state().lock().unwrap().clone()
         )));
         msg_to_send.push(json!(PlayersUpdate::new(
-            server_state.players().lock().unwrap().to_vec()
+            lobby.players().lock().unwrap().to_vec()
         )));
     }
 
@@ -91,18 +91,18 @@ fn handle_message(msg: serde_json::Value, server_state: &mut ServerState) -> Vec
 /// * `rx` - The channel to receive broadcast messages from.
 ///
 pub(crate) fn check_send_broadcast_messages(
-    server_state: Arc<Mutex<ServerState>>,
+    lobby: Arc<Mutex<LobbyState>>,
     rx: mpsc::Receiver<serde_json::Value>,
 ) {
     loop {
         if let Ok(msg) = rx.recv() {
-            let msgs_to_send = handle_message(msg, &mut server_state.lock().unwrap());
+            let msgs_to_send = handle_message(msg, &mut lobby.lock().unwrap());
 
             for msg in msgs_to_send.iter() {
-                let client_txs = server_state.lock().unwrap().client_tx();
+                let client_txs = lobby.lock().unwrap().client_tx();
                 for (client_id, tx) in client_txs.iter() {
                     if tx.send(msg.clone()).is_err() {
-                        server_state.lock().unwrap().remove_client_tx(*client_id);
+                        lobby.lock().unwrap().remove_client_tx(*client_id);
                     }
                 }
             }
@@ -168,7 +168,7 @@ fn client_initialize(net_info: &mut NetworkInfo, tx: &mpsc::Sender<serde_json::V
 
 /// The Main loop to handle each individual clients
 ///
-/// This function is should be run in a separate thread.
+/// This function should be run in a separate thread.
 /// This function reads in the username and create the
 /// shared secret for the client and server to communicate
 ///

@@ -83,19 +83,18 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
     msg_to_send
 }
 
-/// Loop listening for waiting on MPSC channel and handle sending broadcast messages
+/// Loop listening for waiting on MPSC channel and handle sending broadcast messages.
 /// This function will run in a separate thread.
 ///
 /// # Arguments
-/// * `net_infos` - Vector of all the network information of each client.
-/// * `rx` - The channel to receive broadcast messages from.
+/// * `server_rx` - The channel to receive broadcast messages from.
 ///
 pub(crate) fn check_send_broadcast_messages(
     lobby: Arc<Mutex<LobbyState>>,
-    rx: mpsc::Receiver<serde_json::Value>,
+    server_rx: mpsc::Receiver<serde_json::Value>,
 ) {
     loop {
-        if let Ok(msg) = rx.recv() {
+        if let Ok(msg) = server_rx.recv() {
             let msgs_to_send = handle_message(msg, &mut lobby.lock().unwrap());
 
             for msg in msgs_to_send.iter() {
@@ -135,13 +134,8 @@ fn send_ping_message(net_info: &mut NetworkInfo, time_elapsed: Duration) -> Opti
 ///
 /// # Arguments
 /// * `net_info` - The network information of the client.
-/// * `game_state` - The current game_state.
-/// * `lobby` - The lobby state.
-///
-/// # Returns
-/// * bool - True if the client is connected, false if not.
-///
-fn client_initialize(net_info: &mut NetworkInfo, tx: &mpsc::Sender<serde_json::Value>) {
+/// * `server_tx` - The channel to send messages to the broadcast thread.
+fn client_initialize(net_info: &mut NetworkInfo, server_tx: &mpsc::Sender<serde_json::Value>) {
     let _ = net_info
         .tcp_stream
         .set_read_timeout(Some(Duration::from_millis(20)));
@@ -163,10 +157,10 @@ fn client_initialize(net_info: &mut NetworkInfo, tx: &mpsc::Sender<serde_json::V
         .diffie_hellman(&client_public);
     net_info.key = *Key::from_slice(shared_secret.as_bytes());
 
-    let _ = tx.send(json!({"kind": "user_init", "id": net_info.id , "username": username}));
+    let _ = server_tx.send(json!({"kind": "user_init", "id": net_info.id , "username": username}));
 }
 
-/// The Main loop to handle each individual clients
+/// The main loop to handle each individual client.
 ///
 /// This function should be run in a separate thread.
 /// This function reads in the username and create the
@@ -174,34 +168,33 @@ fn client_initialize(net_info: &mut NetworkInfo, tx: &mpsc::Sender<serde_json::V
 ///
 /// # Arguments
 /// * `net_info` - The network information of the client.
-/// * `game_state` - The current game_state.
-/// * `lobby_state` - The lobby state.
-/// * `tx` - The channel to send messages to the broadcast thread.
+/// * `server_tx` - The channel to send messages to the broadcast thread.
+/// * `client_tx` - The channel to receive messages from the client.
 ///
 pub(crate) fn handle_client(
     mut net_info: NetworkInfo,
-    tx: mpsc::Sender<serde_json::Value>,
-    rx: mpsc::Receiver<serde_json::Value>,
+    server_tx: mpsc::Sender<serde_json::Value>,
+    client_rx: mpsc::Receiver<serde_json::Value>,
 ) {
-    client_initialize(&mut net_info, &tx);
+    client_initialize(&mut net_info, &server_tx);
     let mut keepalive = Instant::now();
     let player_id = net_info.id;
 
-    //Start of the main loop to read messages and send keep-alive pings
+    //Start of the client thread's main loop to read messages and send keep-alive pings
     loop {
         if let Ok(msg) = read_tcp_message(&mut net_info) {
-            let _ = tx.send(msg);
+            let _ = server_tx.send(msg);
             keepalive = Instant::now();
         }
 
         // Check if rx has messages waiting and if yes, send them to the client
-        if let Ok(msg) = rx.try_recv() {
+        if let Ok(msg) = client_rx.try_recv() {
             let _ = send_message(&mut net_info, &msg);
         }
 
         match send_ping_message(&mut net_info, Instant::now().duration_since(keepalive)) {
             Some(false) => {
-                let _ = tx.send(json!(DisconnectMessage::new(player_id)));
+                let _ = server_tx.send(json!(DisconnectMessage::new(player_id)));
                 return;
             }
             Some(true) => keepalive = Instant::now(),

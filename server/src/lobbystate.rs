@@ -17,9 +17,9 @@ pub struct LobbyState {
 }
 
 impl LobbyState {
-    pub fn default(words: Vec<String>, tx: mpsc::Sender<serde_json::Value>) -> Self {
+    pub fn default(words: Vec<String>, server_tx: mpsc::Sender<serde_json::Value>) -> Self {
         LobbyState {
-            state: Arc::new(Mutex::new(LobbyStateInner::default(words, tx))),
+            state: Arc::new(Mutex::new(LobbyStateInner::default(words, server_tx))),
             started_lock: Arc::new((PLMutex::new(false), PLCondvar::new())),
         }
     }
@@ -90,7 +90,7 @@ impl LobbyState {
         self.state.lock().unwrap().word_list.clone()
     }
     pub fn tx(&self) -> mpsc::Sender<serde_json::Value> {
-        self.state.lock().unwrap().tx.clone()
+        self.state.lock().unwrap().server_tx.clone()
     }
     pub fn client_tx(&self) -> BTreeMap<i64, mpsc::Sender<Value>> {
         self.state.lock().unwrap().client_tx.clone()
@@ -106,7 +106,7 @@ struct LobbyStateInner {
     pub game_state: Arc<Mutex<GameState>>,
     pub players: Arc<Mutex<Vec<Player>>>,
     pub word_list: Arc<Mutex<Vec<String>>>,
-    pub tx: mpsc::Sender<serde_json::Value>,
+    pub server_tx: mpsc::Sender<serde_json::Value>,
     pub client_tx: BTreeMap<i64, mpsc::Sender<Value>>,
 }
 
@@ -116,12 +116,12 @@ impl LobbyStateInner {
     /// # Arguments
     ///     * `words` - The vector word list to use for the game.
     ///    * `tx` - The tx mpsc to send updates to the clients.
-    pub fn default(words: Vec<String>, tx: mpsc::Sender<serde_json::Value>) -> Self {
+    pub fn default(words: Vec<String>, server_tx: mpsc::Sender<serde_json::Value>) -> Self {
         LobbyStateInner {
             game_state: Arc::new(Mutex::new(GameState::default())),
             players: Arc::new(Mutex::new(Vec::new())),
             word_list: Arc::new(Mutex::new(words)),
-            tx,
+            server_tx,
             client_tx: BTreeMap::new(),
         }
     }

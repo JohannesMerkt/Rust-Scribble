@@ -1,7 +1,7 @@
 #![crate_name = "rust_scribble_server"]
 mod network;
 mod lobbystate;
-mod serverstate;
+mod scribblserver;
 
 use crate::network::handle_client;
 use crate::lobbystate::LobbyState;
@@ -16,6 +16,7 @@ use std::{
     sync::{Arc, mpsc, Mutex},
     thread,
 };
+use crate::scribblserver::ScribblServer;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -26,14 +27,14 @@ struct Args {
     words: String,
 }
 
-/// Main function for the server.
-///
+/// Main function for setting up and running a scribbl server.
 fn main() {
     let args = Args::parse();
 
     let words = read_words_from_file(args.words);
-
-    serverstate::init_tcp_server(args.port, words);
+    let loopback = Ipv4Addr::new(0, 0, 0, 0);
+    let server = ScribblServer::init(loopback, args.port, words);
+    server.run()
 }
 
 /// Get Words from File and put them in a vector

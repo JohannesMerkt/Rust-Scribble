@@ -1,22 +1,21 @@
 #![crate_name = "rust_scribble_server"]
+
+use std::{
+    fs::File,
+    io::{BufRead, BufReader},
+    net::Ipv4Addr,
+    path::Path,
+};
+
+use clap::Parser;
+
+use crate::lobbystate::LobbyState;
+use crate::network::handle_client;
+use crate::scribblserver::ScribblServer;
+
 mod network;
 mod lobbystate;
 mod scribblserver;
-
-use crate::network::handle_client;
-use crate::lobbystate::LobbyState;
-use chacha20poly1305::Key;
-use clap::Parser;
-use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
-use std::{
-    fs::File,
-    io::{BufRead, BufReader, Write},
-    net::{Ipv4Addr, SocketAddrV4, TcpListener},
-    path::Path,
-    sync::{Arc, mpsc, Mutex},
-    thread,
-};
-use crate::scribblserver::ScribblServer;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]

@@ -1,15 +1,15 @@
-use delegate::delegate;
-use parking_lot::{Condvar as PLCondvar, Mutex as PLMutex};
-use rand::Rng;
-use rust_scribble_common::messages_common::{GameStateUpdate, PlayersUpdate};
-use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
+use delegate::delegate;
+use parking_lot::{Condvar as PLCondvar, Mutex as PLMutex};
+use rand::Rng;
 use rust_scribble_common::gamestate_common::*;
+use rust_scribble_common::messages_common::{GameStateUpdate, PlayersUpdate};
+use serde_json::{json, Value};
 
 pub struct LobbyState {
     state: Arc<Mutex<LobbyStateInner>>,
@@ -17,9 +17,9 @@ pub struct LobbyState {
 }
 
 impl LobbyState {
-    pub fn default(words: Vec<String>, server_tx: mpsc::Sender<serde_json::Value>) -> Self {
+    pub fn default(words: Vec<String>, lobby_tx: mpsc::Sender<serde_json::Value>) -> Self {
         LobbyState {
-            state: Arc::new(Mutex::new(LobbyStateInner::default(words, server_tx))),
+            state: Arc::new(Mutex::new(LobbyStateInner::default(words, lobby_tx))),
             started_lock: Arc::new((PLMutex::new(false), PLCondvar::new())),
         }
     }
@@ -27,7 +27,7 @@ impl LobbyState {
     pub fn start_game_on_timer(&mut self, secs: u64) {
         let local_state = self.state.clone();
         let local_started = self.started_lock.clone();
-        let tx = self.tx();
+        let tx = self.lobby_tx();
 
         thread::spawn(move || {
             println!("Init startup thread with {} secs", &secs);
@@ -40,23 +40,14 @@ impl LobbyState {
                 local_state.lock().unwrap().start_game();
                 *started = true;
                 let _ = tx.send(json!(GameStateUpdate::new(
-                    local_state
-                        .lock()
-                        .unwrap()
-                        .game_state
-                        .lock()
-                        .unwrap()
-                        .clone()
+                    local_state.lock().unwrap().game_state.lock().unwrap().clone()
                 )));
                 let _ = tx.send(json!(PlayersUpdate::new(
                     local_state.lock().unwrap().players.lock().unwrap().to_vec()
                 )));
             } // if already true, another startup thread has started the game already
             cvar.notify_all(); // other startup threads are notified and will terminate as started is already set to true
-            println!(
-                "Debug: Startup Thread with {} secs terminated (early)",
-                secs
-            )
+            println!("Debug: Startup Thread with {} secs terminated (early)", secs)
         });
     }
 
@@ -89,8 +80,8 @@ impl LobbyState {
     pub fn _word_list(&self) -> Arc<Mutex<Vec<String>>> {
         self.state.lock().unwrap().word_list.clone()
     }
-    pub fn tx(&self) -> mpsc::Sender<serde_json::Value> {
-        self.state.lock().unwrap().server_tx.clone()
+    pub fn lobby_tx(&self) -> mpsc::Sender<serde_json::Value> {
+        self.state.lock().unwrap().lobby_tx.clone()
     }
     pub fn client_tx(&self) -> BTreeMap<i64, mpsc::Sender<Value>> {
         self.state.lock().unwrap().client_tx.clone()
@@ -106,7 +97,7 @@ struct LobbyStateInner {
     pub game_state: Arc<Mutex<GameState>>,
     pub players: Arc<Mutex<Vec<Player>>>,
     pub word_list: Arc<Mutex<Vec<String>>>,
-    pub server_tx: mpsc::Sender<serde_json::Value>,
+    pub lobby_tx: mpsc::Sender<serde_json::Value>,
     pub client_tx: BTreeMap<i64, mpsc::Sender<Value>>,
 }
 
@@ -116,20 +107,20 @@ impl LobbyStateInner {
     /// # Arguments
     ///     * `words` - The vector word list to use for the game.
     ///    * `tx` - The tx mpsc to send updates to the clients.
-    pub fn default(words: Vec<String>, server_tx: mpsc::Sender<serde_json::Value>) -> Self {
+    pub fn default(words: Vec<String>, lobby_tx: mpsc::Sender<serde_json::Value>) -> Self {
         LobbyStateInner {
             game_state: Arc::new(Mutex::new(GameState::default())),
             players: Arc::new(Mutex::new(Vec::new())),
             word_list: Arc::new(Mutex::new(words)),
-            server_tx,
+            lobby_tx,
             client_tx: BTreeMap::new(),
         }
     }
 
-    /// Adds a player to the game.
+    /// Adds a player' communication channel to the game.
     ///
     /// # Arguments
-    ///    * `id` - The id of the player.
+    ///   * `id` - The id of the player.
     ///   * `tx` - The tx mpsc to send updates to the clients.
     pub fn add_client_tx(&mut self, id: i64, tx: mpsc::Sender<Value>) {
         self.client_tx.insert(id, tx);

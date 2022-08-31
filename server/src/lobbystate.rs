@@ -259,9 +259,9 @@ impl LobbyStateInner {
         let mut players = self.players.lock().unwrap();
         game_state.in_game = true;
         game_state.time = 500;
-        let drawer_id = rand::thread_rng().gen_range(1, players.len() + 1) as i64;
-        for player in &mut players.iter_mut() {
-            if drawer_id == player.id {
+        let drawer_index = rand::thread_rng().gen_range(0, players.len());
+        for (index, player) in (&mut players.iter_mut()).enumerate() {
+            if drawer_index == index {
                 player.drawing = true;
             } else {
                 player.drawing = false;

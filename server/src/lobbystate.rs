@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -40,14 +40,23 @@ impl LobbyState {
                 local_state.lock().unwrap().start_game();
                 *started = true;
                 let _ = tx.send(json!(GameStateUpdate::new(
-                    local_state.lock().unwrap().game_state.lock().unwrap().clone()
+                    local_state
+                        .lock()
+                        .unwrap()
+                        .game_state
+                        .lock()
+                        .unwrap()
+                        .clone()
                 )));
                 let _ = tx.send(json!(PlayersUpdate::new(
                     local_state.lock().unwrap().players.lock().unwrap().to_vec()
                 )));
             } // if already true, another startup thread has started the game already
             cvar.notify_all(); // other startup threads are notified and will terminate as started is already set to true
-            println!("Debug: Startup Thread with {} secs terminated (early)", secs)
+            println!(
+                "Debug: Startup Thread with {} secs terminated (early)",
+                secs
+            )
         });
     }
 
@@ -207,7 +216,9 @@ impl LobbyStateInner {
     /// * `false` - If not all players have guessed the word.
     pub fn all_guessed(&mut self) -> bool {
         if self.players.lock().unwrap().iter().all(|player| {
-            !player.drawing && player.guessed_word || player.drawing && !player.guessed_word
+            !player.playing
+                || !player.drawing && player.guessed_word
+                || player.drawing && !player.guessed_word
         }) {
             self.end_game();
             return true;
@@ -226,7 +237,7 @@ impl LobbyStateInner {
         let mut players = self.players.lock().unwrap();
         if game_state.in_game && game_state.word.to_lowercase().eq(&message.to_lowercase()) {
             for player in &mut players.iter_mut() {
-                if player.id == player_id && !player.drawing {
+                if player.id == player_id && !player.drawing && player.playing {
                     player.guessed_word = true;
                     player.score += 50;
                     return true;

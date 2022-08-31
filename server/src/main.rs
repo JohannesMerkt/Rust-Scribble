@@ -13,8 +13,8 @@ use crate::lobbystate::LobbyState;
 use crate::network::handle_client;
 use crate::scribblserver::ScribblServer;
 
-mod network;
 mod lobbystate;
+mod network;
 mod scribblserver;
 
 #[derive(Parser, Debug)]

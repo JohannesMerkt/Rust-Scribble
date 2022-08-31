@@ -59,7 +59,8 @@ impl LobbyState {
         to self.state.lock().unwrap() {
             pub fn add_player(&mut self, id: i64, name: String);
             pub fn remove_player(&mut self, player_id: i64);
-            pub fn set_ready(&mut self, player_id: i64, status: bool) -> bool;
+            pub fn set_ready(&mut self, player_id: i64, status: bool);
+            pub fn all_ready(&self) -> bool;
             pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> bool;
             pub fn all_guessed(&mut self) -> bool;
             pub fn add_client_tx(&mut self, id: i64, tx: mpsc::Sender<Value>);
@@ -177,7 +178,7 @@ impl LobbyStateInner {
     }
 
     /// Check if all players are ready.
-    fn all_ready(&self) -> bool {
+    pub fn all_ready(&self) -> bool {
         self.players
             .lock()
             .unwrap()
@@ -191,15 +192,12 @@ impl LobbyStateInner {
     ///   * `player_id` - The id of the player.
     ///  * `status` - The new ready status.
     ///
-    pub fn set_ready(&mut self, player_id: i64, status: bool) -> bool {
+    pub fn set_ready(&mut self, player_id: i64, status: bool) {
         //Set player with player_id to ready
         let mut players = self.players.lock().unwrap();
         if let Some(player) = players.iter_mut().find(|player| player.id == player_id) {
             player.ready = status;
-            return true;
         }
-        //Check if all players are ready
-        self.all_ready()
     }
 
     /// Check if all players have guessed the word.

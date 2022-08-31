@@ -14,6 +14,8 @@ use crate::lobbystate::LobbyState;
 
 const DELAY_BEFORE_GAME_START: u64 = 5;
 
+const MIN_NUMBER_PLAYERS_TO_START: usize = 2;
+
 /// Handles a client message.
 ///
 /// # Arguments
@@ -38,7 +40,8 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
     } else if msg["kind"].eq("ready") {
         let id = msg["id"].as_i64().unwrap();
         let status = msg["ready"].as_bool().unwrap();
-        if lobby.set_ready(id, status) {
+        lobby.set_ready(id, status);
+        if lobby.all_ready() && lobby.players().lock().unwrap().len() >= MIN_NUMBER_PLAYERS_TO_START {
             lobby.start_game_on_timer(DELAY_BEFORE_GAME_START);
         }
         msg_to_send.push(json!(PlayersUpdate::new(

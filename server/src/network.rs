@@ -1,5 +1,5 @@
 use std::io::{BufRead, BufReader, Read};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, mpsc, Mutex};
 use std::time::{Duration, Instant};
 
 use chacha20poly1305::Key;
@@ -10,11 +10,11 @@ use rust_scribble_common::network_common::*;
 use serde_json::{json, Value};
 use x25519_dalek::PublicKey;
 
+use crate::lobbystate;
 use crate::lobbystate::LobbyState;
 
-const DELAY_BEFORE_GAME_START: u64 = 5;
-
-const MIN_NUMBER_PLAYERS_TO_START: usize = 2;
+const DELAY_BEFORE_GAME_START: u64 = 5; // seconds
+const MIN_TIME_BETWEEN_PINGS: u64 = 15; // seconds
 
 /// Handles a client message.
 ///
@@ -42,7 +42,7 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
         let id = msg["id"].as_i64().unwrap();
         let status = msg["ready"].as_bool().unwrap();
         lobby.set_ready(id, status);
-        if lobby.all_ready() && lobby.players().lock().unwrap().len() >= MIN_NUMBER_PLAYERS_TO_START
+        if lobby.all_ready() && lobby.players().lock().unwrap().len() >= lobbystate::MIN_NUMBER_PLAYERS
         {
             lobby.start_game_on_timer(DELAY_BEFORE_GAME_START);
         }
@@ -124,6 +124,7 @@ pub(crate) fn check_send_broadcast_messages(
     }
 }
 
+
 /// Send a JSON message to check if the client is still connected.
 ///
 /// # Arguments
@@ -135,7 +136,7 @@ pub(crate) fn check_send_broadcast_messages(
 /// * `None` - There was no ping sent.
 ///
 fn send_ping_message(net_info: &mut NetworkInfo, time_elapsed: Duration) -> Option<bool> {
-    if time_elapsed.as_secs() > 15 {
+    if time_elapsed.as_secs() > MIN_TIME_BETWEEN_PINGS {
         match send_message(net_info, &json!({"kind": "ping"})) {
             Ok(_) => Some(true),
             Err(_) => Some(false),

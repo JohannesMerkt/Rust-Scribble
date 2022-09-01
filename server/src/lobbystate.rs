@@ -13,6 +13,8 @@ use serde_json::{json, Value};
 
 use crate::rewardstrategy::RewardStrategy;
 
+pub(crate) const MIN_NUMBER_PLAYERS: usize = 2;
+
 pub struct LobbyState {
     state: Arc<Mutex<LobbyStateInner>>,
     started_lock: Arc<(PLMutex<bool>, PLCondvar)>,
@@ -207,7 +209,7 @@ impl LobbyStateInner {
             }
             players.retain(|player| player.id != player_id);
             // leave ingame when only 1 player
-            if players.len() < 2 {
+            if players.len() < MIN_NUMBER_PLAYERS {
                 end_game = true;
             }
         }

@@ -29,6 +29,7 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
     let mut msg_to_send: Vec<Value> = vec![];
 
     let send_update = !msg["kind"].eq("update");
+    let mut clean_up_lobby = false;
 
     if msg["kind"].eq("user_init") {
         let id = msg["id"].as_i64().unwrap();
@@ -54,8 +55,7 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
             msg["message"].as_str().unwrap(),
         ) {
             if lobby.all_guessed() {
-                //needed to allow timer to start game again
-                lobby.cleanup_lobby_after_end_game();
+                clean_up_lobby = true;
             }
             msg_to_send.push(json!(ChatMessage::new(
                 msg["id"].as_i64().unwrap(),
@@ -67,13 +67,21 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
     } else if msg["kind"].eq("disconnect") {
         let id = msg["id"].as_i64().unwrap();
         lobby.remove_player(id);
+        if lobby.game_state().lock().unwrap().in_game {
+            clean_up_lobby = true;
+        }
         msg_to_send.push(json!(PlayersUpdate::new(
             lobby.players().lock().unwrap().to_vec()
         )));
     } else if msg["kind"].eq("time_up") {
-        lobby.cleanup_lobby_after_end_game();
+        clean_up_lobby = true;
     } else {
         msg_to_send.push(msg);
+    }
+
+    if clean_up_lobby {
+        //needed to allow timer to start game again
+        lobby.cleanup_lobby_after_end_game();
     }
 
     if send_update {

@@ -1,5 +1,5 @@
 use std::io::{BufRead, BufReader, Read};
-use std::sync::{Arc, mpsc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use chacha20poly1305::Key;
@@ -41,7 +41,8 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
         let id = msg["id"].as_i64().unwrap();
         let status = msg["ready"].as_bool().unwrap();
         lobby.set_ready(id, status);
-        if lobby.all_ready() && lobby.players().lock().unwrap().len() >= MIN_NUMBER_PLAYERS_TO_START {
+        if lobby.all_ready() && lobby.players().lock().unwrap().len() >= MIN_NUMBER_PLAYERS_TO_START
+        {
             lobby.start_game_on_timer(DELAY_BEFORE_GAME_START);
         }
         msg_to_send.push(json!(PlayersUpdate::new(

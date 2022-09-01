@@ -1,14 +1,14 @@
 use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener};
-use std::sync::{Arc, mpsc, Mutex};
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
 use chacha20poly1305::Key;
 use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
 use serde_json::Value;
 
-use crate::{handle_client, LobbyState, network};
+use crate::{handle_client, network, LobbyState};
 use crate::rewardstrategy::ExponentiallyDecreasingRewardStrategy;
 
 pub struct ScribblServer {
@@ -59,7 +59,11 @@ impl ScribblServer {
         }
     }
 
-    fn accept_client(&self, listener: &TcpListener, next_client_id: &mut i64) -> Option<NetworkInfo> {
+    fn accept_client(
+        &self,
+        listener: &TcpListener,
+        next_client_id: &mut i64,
+    ) -> Option<NetworkInfo> {
         let (public_key, secret_key) = generate_keypair();
         let (mut tcp_stream, addr) = listener.accept().unwrap();
         println!("Connection received! {:?} is Connected.", addr);
@@ -104,8 +108,11 @@ impl ScribblServer {
     fn setup_new_lobby(&mut self) -> Arc<Mutex<LobbyState>> {
         println!("Setting up new lobby");
         let (lobby_tx, lobby_rx): (Sender<Value>, Receiver<Value>) = mpsc::channel();
-        let new_lobby = Arc::new(Mutex::new(
-            LobbyState::default(self.words.to_vec(), &REWARD_STRATEGY, lobby_tx)));
+        let new_lobby = Arc::new(Mutex::new(LobbyState::default(
+            self.words.to_vec(),
+            &REWARD_STRATEGY,
+            lobby_tx,
+        )));
         self.lobbies.push(new_lobby.clone());
         let lobby_ref = new_lobby.clone();
         // Spawn a new thread for handling broadcast messages

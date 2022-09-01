@@ -239,7 +239,7 @@ fn render_ingame_view(
                         }
                     }
                 }
-                if response.drag_released() {
+                if response.drag_released() && clientstate.current_line.is_some() {
                     network_plugin::send_line(
                         networkstate,
                         clientstate.current_line.as_ref().unwrap(),

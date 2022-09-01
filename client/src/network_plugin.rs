@@ -1,6 +1,7 @@
 use crate::clientstate::ClientState;
 use crate::network;
 use bevy::prelude::*;
+use rand::seq::SliceRandom;
 use rust_scribble_common::gamestate_common::*;
 use rust_scribble_common::messages_common::*;
 use rust_scribble_common::network_common::*;
@@ -20,12 +21,78 @@ pub struct NetworkState {
 impl Default for NetworkState {
     fn default() -> Self {
         NetworkState {
-            name: "Player".to_string(),
+            name: generate_name(),
             address: "127.0.0.1".to_string(),
             port: 3000,
             info: None,
         }
     }
+}
+
+/// Generate a random name for a player
+///
+/// # Returns
+///
+/// * `String` - a random two part name
+fn generate_name() -> String {
+    let adjectives = [
+        "Adorable",
+        "Bewildered",
+        "Busy",
+        "Determined",
+        "Eager",
+        "Famous",
+        "Gentle",
+        "Hungry",
+        "Innocent",
+        "Jolly",
+        "Kind",
+        "Lively",
+        "Magnificent",
+        "Nervous",
+        "Obedient",
+        "Perfect",
+        "Quaint",
+        "Relieved",
+        "Scary",
+        "Talented",
+        "Ugliest",
+        "Victorious",
+        "Witty",
+        "Zealous",
+    ];
+    let nouns = [
+        "Alligator",
+        "Bear",
+        "Cat",
+        "Dog",
+        "Elephant",
+        "Frog",
+        "Giraffe",
+        "Hippo",
+        "Iguana",
+        "Jaguar",
+        "Koala",
+        "Lion",
+        "Monkey",
+        "Narwhal",
+        "Owl",
+        "Panda",
+        "Quail",
+        "Rabbit",
+        "Snake",
+        "Tiger",
+        "Uakari",
+        "Vulture",
+        "Walrus",
+        "Xerus",
+        "Yak",
+        "Zebra",
+    ];
+    let mut rng = rand::thread_rng();
+    let adjective = adjectives.choose(&mut rng).unwrap();
+    let noun = nouns.choose(&mut rng).unwrap();
+    format!("{} {}", adjective, noun)
 }
 
 struct CheckNetworkTimer(Timer);

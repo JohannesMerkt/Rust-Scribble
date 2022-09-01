@@ -55,7 +55,7 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
         ) {
             if lobby.all_guessed() {
                 //needed to allow timer to start game again
-                lobby.end_game();
+                lobby.cleanup_lobby_after_end_game();
             }
             msg_to_send.push(json!(ChatMessage::new(
                 msg["id"].as_i64().unwrap(),
@@ -70,6 +70,8 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
         msg_to_send.push(json!(PlayersUpdate::new(
             lobby.players().lock().unwrap().to_vec()
         )));
+    } else if msg["kind"].eq("time_up") {
+        lobby.cleanup_lobby_after_end_game();
     } else {
         msg_to_send.push(msg);
     }

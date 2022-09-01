@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
-use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
@@ -40,6 +40,7 @@ impl LobbyState {
             cvar.wait_for(&mut started, Duration::from_secs(secs));
             if !(*started) && local_state.lock().unwrap().all_ready() {
                 local_state.lock().unwrap().start_game();
+                Self::start_timer_thread(local_state.clone(), tx.clone());
                 *started = true;
                 let _ = tx.send(json!(GameStateUpdate::new(
                     local_state
@@ -62,7 +63,31 @@ impl LobbyState {
         });
     }
 
-    pub fn end_game(&mut self) {
+    fn start_timer_thread(state_ref: Arc<Mutex<LobbyStateInner>>, lobby_tx: mpsc::Sender<Value>) {
+        let tick = schedule_recv::periodic(Duration::from_secs(1));
+        thread::spawn(move || {
+            loop {
+                tick.recv().unwrap();
+                let state = state_ref.lock().unwrap();
+                let mut game_state = state.game_state.lock().unwrap();
+                if !game_state.in_game { break; }
+                let new_time = game_state.time - 1;
+                game_state.time = new_time;
+                drop(game_state);
+                drop(state);
+                if new_time == 0 {
+                    let mut state = state_ref.lock().unwrap();
+                    state.end_game();
+                    drop(state);
+                    lobby_tx.send(json!({"kind": "time_up"}))
+                        .expect("Lobby has lost channel connection to network!");
+                    break;
+                }
+            }
+        });
+    }
+
+    pub fn cleanup_lobby_after_end_game(&mut self) {
         *self.started_lock.0.lock() = false;
     }
 
@@ -96,7 +121,7 @@ impl LobbyState {
         self.state.lock().unwrap().lobby_tx.clone()
     }
     pub fn client_tx(&self) -> BTreeMap<i64, mpsc::Sender<Value>> {
-        self.state.lock().unwrap().client_tx.clone()
+        self.state.lock().unwrap().client_txs.clone()
     }
 }
 
@@ -110,7 +135,7 @@ struct LobbyStateInner {
     pub players: Arc<Mutex<Vec<Player>>>,
     pub word_list: Arc<Mutex<Vec<String>>>,
     pub lobby_tx: mpsc::Sender<serde_json::Value>,
-    pub client_tx: BTreeMap<i64, mpsc::Sender<Value>>,
+    pub client_txs: BTreeMap<i64, mpsc::Sender<Value>>,
     pub reward_strategy: &'static dyn RewardStrategy,
 }
 
@@ -119,7 +144,7 @@ impl LobbyStateInner {
     ///
     /// # Arguments
     ///   * `words` - The vector word list to use for the game.
-    ///   * `tx` - The tx mpsc to send updates to the clients.
+    ///   * `lobby_tx` - The tx mpsc to send updates to the clients.
     ///   * `reward_strategy` - The reward strategy to use for the game.
     /// It determines how points are awarded for correct guesses.
     pub fn default(words: Vec<String>, reward_strategy: &'static dyn RewardStrategy, lobby_tx: mpsc::Sender<serde_json::Value>) -> Self {
@@ -128,7 +153,7 @@ impl LobbyStateInner {
             players: Arc::new(Mutex::new(Vec::new())),
             word_list: Arc::new(Mutex::new(words)),
             lobby_tx,
-            client_tx: BTreeMap::new(),
+            client_txs: BTreeMap::new(),
             reward_strategy,
         }
     }
@@ -139,7 +164,7 @@ impl LobbyStateInner {
     ///   * `id` - The id of the player.
     ///   * `tx` - The tx mpsc to send updates to the clients.
     pub fn add_client_tx(&mut self, id: i64, tx: mpsc::Sender<Value>) {
-        self.client_tx.insert(id, tx);
+        self.client_txs.insert(id, tx);
     }
 
     /// Removes a client tx from the game and removes the player id.
@@ -149,7 +174,7 @@ impl LobbyStateInner {
     ///
     pub fn remove_client_tx(&mut self, id: i64) {
         self.remove_player(id);
-        self.client_tx.remove(&id);
+        self.client_txs.remove(&id);
     }
 
     /// Adds a player to the game.

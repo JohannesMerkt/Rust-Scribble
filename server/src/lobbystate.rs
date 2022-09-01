@@ -11,15 +11,17 @@ use rust_scribble_common::gamestate_common::*;
 use rust_scribble_common::messages_common::{GameStateUpdate, PlayersUpdate};
 use serde_json::{json, Value};
 
+use crate::rewardstrategy::RewardStrategy;
+
 pub struct LobbyState {
     state: Arc<Mutex<LobbyStateInner>>,
     started_lock: Arc<(PLMutex<bool>, PLCondvar)>,
 }
 
 impl LobbyState {
-    pub fn default(words: Vec<String>, lobby_tx: mpsc::Sender<serde_json::Value>) -> Self {
+    pub fn default(words: Vec<String>, reward_strategy: &'static dyn RewardStrategy, lobby_tx: mpsc::Sender<serde_json::Value>) -> Self {
         LobbyState {
-            state: Arc::new(Mutex::new(LobbyStateInner::default(words, lobby_tx))),
+            state: Arc::new(Mutex::new(LobbyStateInner::default(words, reward_strategy, lobby_tx))),
             started_lock: Arc::new((PLMutex::new(false), PLCondvar::new())),
         }
     }
@@ -109,21 +111,25 @@ struct LobbyStateInner {
     pub word_list: Arc<Mutex<Vec<String>>>,
     pub lobby_tx: mpsc::Sender<serde_json::Value>,
     pub client_tx: BTreeMap<i64, mpsc::Sender<Value>>,
+    pub reward_strategy: &'static dyn RewardStrategy,
 }
 
 impl LobbyStateInner {
     /// Creates a new ServerStateInner with the given word list and tx.
     ///
     /// # Arguments
-    ///     * `words` - The vector word list to use for the game.
-    ///    * `tx` - The tx mpsc to send updates to the clients.
-    pub fn default(words: Vec<String>, lobby_tx: mpsc::Sender<serde_json::Value>) -> Self {
+    ///   * `words` - The vector word list to use for the game.
+    ///   * `tx` - The tx mpsc to send updates to the clients.
+    ///   * `reward_strategy` - The reward strategy to use for the game.
+    /// It determines how points are awarded for correct guesses.
+    pub fn default(words: Vec<String>, reward_strategy: &'static dyn RewardStrategy, lobby_tx: mpsc::Sender<serde_json::Value>) -> Self {
         LobbyStateInner {
             game_state: Arc::new(Mutex::new(GameState::default())),
             players: Arc::new(Mutex::new(Vec::new())),
             word_list: Arc::new(Mutex::new(words)),
             lobby_tx,
             client_tx: BTreeMap::new(),
+            reward_strategy,
         }
     }
 
@@ -235,16 +241,22 @@ impl LobbyStateInner {
     pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> bool {
         let game_state = self.game_state.lock().unwrap();
         let mut players = self.players.lock().unwrap();
+        let nr_players_finished = Self::calc_position_finished(&*players);
+        let total_nr_of_players = players.len();
         if game_state.in_game && game_state.word.to_lowercase().eq(&message.to_lowercase()) {
             for player in &mut players.iter_mut() {
                 if player.id == player_id && !player.drawing && player.playing {
                     player.guessed_word = true;
-                    player.score += 50;
+                    self.reward_strategy.reward_points_to_player(player, total_nr_of_players, nr_players_finished);
                     return true;
                 }
             }
         }
         false
+    }
+
+    fn calc_position_finished(all_players: &[Player]) -> usize {
+        all_players.iter().filter(|p| p.guessed_word).count()
     }
 
     /// Gets a new random word from the word list and removes it from the word list.

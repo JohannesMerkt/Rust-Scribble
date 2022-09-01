@@ -16,6 +16,7 @@ use crate::scribblserver::ScribblServer;
 mod network;
 mod lobbystate;
 mod scribblserver;
+mod rewardstrategy;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]

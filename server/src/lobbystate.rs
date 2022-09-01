@@ -10,6 +10,7 @@ use rand::Rng;
 use rust_scribble_common::gamestate_common::*;
 use rust_scribble_common::messages_common::{GameStateUpdate, PlayersUpdate};
 use serde_json::{json, Value};
+use crate::rewardstrategy::RewardStrategy;
 
 pub struct LobbyState {
     state: Arc<Mutex<LobbyStateInner>>,

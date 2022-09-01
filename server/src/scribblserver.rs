@@ -9,6 +9,7 @@ use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
 use serde_json::Value;
 
 use crate::{handle_client, LobbyState, network};
+use crate::rewardstrategy::ExponentiallyDecreasingRewardStrategy;
 
 pub struct ScribblServer {
     socket: SocketAddrV4,
@@ -17,6 +18,10 @@ pub struct ScribblServer {
 }
 
 const OPTIMAL_LOBBY_SIZE: usize = 5;
+static REWARD_STRATEGY: ExponentiallyDecreasingRewardStrategy = ExponentiallyDecreasingRewardStrategy{
+    full_reward: 100,
+    decrease_per_position: 0.2
+};
 
 impl ScribblServer {
     /// Initialize the server with the given ip and port.
@@ -100,7 +105,7 @@ impl ScribblServer {
         println!("Setting up new lobby");
         let (lobby_tx, lobby_rx): (Sender<Value>, Receiver<Value>) = mpsc::channel();
         let new_lobby = Arc::new(Mutex::new(
-            LobbyState::default(self.words.to_vec(), lobby_tx)));
+            LobbyState::default(self.words.to_vec(), &REWARD_STRATEGY, lobby_tx)));
         self.lobbies.push(new_lobby.clone());
         let lobby_ref = new_lobby.clone();
         // Spawn a new thread for handling broadcast messages

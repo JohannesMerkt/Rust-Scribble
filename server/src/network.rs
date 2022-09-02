@@ -84,7 +84,7 @@ fn handle_message(msg: Value, lobby: &mut LobbyState) -> Vec<Value> {
     } else if msg["kind"].eq("disconnect") {
         let id = msg["id"].as_i64().unwrap();
         lobby.remove_player(id);
-        if lobby.game_state().lock().unwrap().in_game {
+        if !lobby.game_state().lock().unwrap().in_game {
             clean_up_lobby = true;
         }
         msg_to_send.push(json!(PlayersUpdate::new(

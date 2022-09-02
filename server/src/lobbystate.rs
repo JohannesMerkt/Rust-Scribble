@@ -5,16 +5,19 @@ use std::thread;
 use std::time::Duration;
 
 use delegate::delegate;
+use edit_distance::edit_distance;
 use parking_lot::{Condvar as PLCondvar, Mutex as PLMutex};
 use rand::Rng;
 use rust_scribble_common::gamestate_common::*;
-use rust_scribble_common::messages_common::{GameStateUpdate};
+use rust_scribble_common::messages_common::GameStateUpdate;
 use serde_json::{json, Value};
 
-use crate::rewardstrategy::RewardStrategy;
+use crate::rewardstrategy::{RewardStrategyDrawer, RewardStrategyGuesser};
 
 pub(crate) const MIN_NUMBER_PLAYERS: usize = 2;
-const GAME_TIME: i64 = 500; // seconds
+pub(crate) const GAME_TIME: i64 = 500;
+// seconds
+const MAX_ALLOWED_EDIT_DISTANCE_FOR_ALMOST: usize = 2;
 
 pub struct LobbyState {
     state: Arc<Mutex<LobbyStateInner>>,
@@ -22,9 +25,14 @@ pub struct LobbyState {
 }
 
 impl LobbyState {
-    pub fn default(words: Vec<String>, reward_strategy: &'static dyn RewardStrategy, lobby_tx: mpsc::Sender<Value>) -> Self {
+    pub fn default(words: Vec<String>,
+                   reward_strategy_guesser: &'static dyn RewardStrategyGuesser,
+                   reward_strategy_drawer: &'static dyn RewardStrategyDrawer,
+                   lobby_tx: mpsc::Sender<Value>)
+                   -> Self {
         LobbyState {
-            state: Arc::new(Mutex::new(LobbyStateInner::default(words, reward_strategy, lobby_tx))),
+            state: Arc::new(Mutex::new(LobbyStateInner::default(
+                words, reward_strategy_guesser, reward_strategy_drawer, lobby_tx))),
             started_lock: Arc::new((PLMutex::new(false), PLCondvar::new())),
         }
     }
@@ -94,7 +102,7 @@ impl LobbyState {
             pub fn remove_player(&mut self, player_id: i64);
             pub fn set_ready(&mut self, player_id: i64, status: bool);
             pub fn all_ready(&self) -> bool;
-            pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> bool;
+            pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> GuessResult;
             pub fn all_guessed(&mut self) -> bool;
             pub fn add_client_tx(&mut self, id: i64, tx: mpsc::Sender<Value>);
             pub fn remove_client_tx(&mut self, id: i64);
@@ -133,8 +141,10 @@ struct LobbyStateInner {
     pub word_list: Arc<Mutex<Vec<String>>>,
     pub lobby_tx: mpsc::Sender<Value>,
     pub client_txs: BTreeMap<i64, mpsc::Sender<Value>>,
-    pub reward_strategy: &'static dyn RewardStrategy,
+    pub reward_strategy_guesser: &'static dyn RewardStrategyGuesser,
+    pub reward_strategy_drawer: &'static dyn RewardStrategyDrawer,
 }
+
 
 impl LobbyStateInner {
     /// Creates a new ServerStateInner with the given word list and tx.
@@ -142,16 +152,22 @@ impl LobbyStateInner {
     /// # Arguments
     ///   * `words` - The vector word list to use for the game.
     ///   * `lobby_tx` - The tx mpsc to send updates to the clients.
-    ///   * `reward_strategy` - The reward strategy to use for the game.
+    ///   * `reward_strategy_guesser` - The reward strategy used to award points to guessers.
+    ///   * `reward_strategy_drawer` - The reward strategy used to award points to the drawer.
     /// It determines how points are awarded for correct guesses.
-    pub fn default(words: Vec<String>, reward_strategy: &'static dyn RewardStrategy, lobby_tx: mpsc::Sender<Value>) -> Self {
+    pub fn default(words: Vec<String>,
+                   reward_strategy_guesser: &'static dyn RewardStrategyGuesser,
+                   reward_strategy_drawer: &'static dyn RewardStrategyDrawer,
+                   lobby_tx: mpsc::Sender<Value>)
+                   -> Self {
         LobbyStateInner {
             game_state: Arc::new(Mutex::new(GameState::default())),
             players: Arc::new(Mutex::new(Vec::new())),
             word_list: Arc::new(Mutex::new(words)),
             lobby_tx,
             client_txs: BTreeMap::new(),
-            reward_strategy,
+            reward_strategy_guesser,
+            reward_strategy_drawer,
         }
     }
 
@@ -260,21 +276,43 @@ impl LobbyStateInner {
     ///  * `player_id` - The id of the player.
     ///  * `message` - The message received from the client.
     ///
-    pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> bool {
+    pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> GuessResult {
         let game_state = self.game_state.lock().unwrap();
         let mut players = self.players.lock().unwrap();
         let nr_players_finished = Self::calc_position_finished(&*players);
-        let total_nr_of_players = players.len();
-        if game_state.in_game && game_state.word.to_lowercase().eq(&message.to_lowercase()) {
-            for player in &mut players.iter_mut() {
-                if player.id == player_id && !player.drawing && player.playing {
+        let number_of_guessers = players.len() - 1;
+        let mut result = GuessResult::Incorrect;
+        for player in &mut players.iter_mut() {
+            if game_state.in_game && player.id == player_id {
+                if !player.playing {
+                    result = GuessResult::Spectating;
+                } else if player.drawing {
+                    result = GuessResult::Drawing;
+                } else if player.guessed_word {
+                    result = GuessResult::AlreadyGuessed;
+                } else if game_state.word.to_lowercase().eq(&message.to_lowercase()) {
                     player.guessed_word = true;
-                    self.reward_strategy.reward_points_to_player(player, total_nr_of_players, nr_players_finished);
-                    return true;
+                    self.reward_strategy_guesser.reward_points_to_guesser(
+                        player,
+                        number_of_guessers,
+                        nr_players_finished,
+                        game_state.time);
+                    result = GuessResult::Correct;
+                } else if edit_distance(&*game_state.word.to_lowercase(), &message.to_lowercase())
+                    <= MAX_ALLOWED_EDIT_DISTANCE_FOR_ALMOST {
+                    result = GuessResult::Almost;
                 }
             }
         }
-        false
+        if result == GuessResult::Correct {
+            let drawer = players.iter_mut().find(|player| player.drawing).unwrap();
+            self.reward_strategy_drawer.reward_points_to_drawer(
+                drawer,
+                number_of_guessers,
+                nr_players_finished,
+                game_state.time);
+        }
+        result
     }
 
     fn calc_position_finished(all_players: &[Player]) -> usize {
@@ -330,4 +368,14 @@ impl LobbyStateInner {
             player.drawing = false;
         }
     }
+}
+
+#[derive(Eq, PartialEq)]
+pub enum GuessResult {
+    Correct,
+    Incorrect,
+    AlreadyGuessed,
+    Almost,
+    Drawing,
+    Spectating,
 }

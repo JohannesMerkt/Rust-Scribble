@@ -126,7 +126,9 @@ pub(crate) fn check_send_broadcast_messages(
 ) {
     loop {
         if let Ok(msg) = lobby_rx.recv() {
-            println!("Received message: {:?}", msg);
+            if !msg["kind"].eq("update") {
+                println!("Received message: {:?}", msg);
+            }
             let msgs_to_send = handle_message(msg, &mut lobby.lock().unwrap());
 
             for msg in msgs_to_send.iter() {

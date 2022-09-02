@@ -11,9 +11,10 @@ use serde_json::{json, Value};
 use x25519_dalek::PublicKey;
 
 use crate::lobbystate;
-use crate::lobbystate::LobbyState;
+use crate::lobbystate::{GuessResult, LobbyState};
 
-const DELAY_BEFORE_GAME_START: u64 = 3; // seconds
+const DELAY_BEFORE_GAME_START: u64 = 3;
+// seconds
 const MIN_TIME_BETWEEN_PINGS: u64 = 15; // seconds
 
 /// Handles a client message.
@@ -52,19 +53,33 @@ fn handle_message(msg: Value, lobby: &mut LobbyState) -> Vec<Value> {
             lobby.players().lock().unwrap().to_vec()
         )));
     } else if msg["kind"].eq("chat_message") {
-        if lobby.chat_or_correct_guess(
+        let guess_result = lobby.chat_or_correct_guess(
             msg["id"].as_i64().unwrap(),
             msg["message"].as_str().unwrap(),
-        ) {
-            if lobby.all_guessed() {
-                clean_up_lobby = true;
-            }
-            msg_to_send.push(json!(ChatMessage::new(
+        );
+        match guess_result {
+            GuessResult::Correct => {
+                if lobby.all_guessed() {
+                    clean_up_lobby = true;
+                }
+                msg_to_send.push(json!(ChatMessage::new(
                 msg["id"].as_i64().unwrap(),
                 "Guessed the word correctly!".to_string()
             )));
-        } else {
-            msg_to_send.push(msg);
+            }
+            GuessResult::Incorrect => msg_to_send.push(msg),
+            GuessResult::AlreadyGuessed => msg_to_send.push(json!(ChatMessage::new(
+                msg["id"].as_i64().unwrap(),
+                "Already guessed correctly!".to_string()))),
+            GuessResult::Almost => msg_to_send.push(json!(ChatMessage::new(
+                msg["id"].as_i64().unwrap(),
+                "Close!".to_string()))),
+            GuessResult::Drawing => msg_to_send.push(json!(ChatMessage::new(
+                msg["id"].as_i64().unwrap(),
+                "Drawer may not chat!".to_string()))),
+            GuessResult::Spectating => msg_to_send.push(json!(ChatMessage::new(
+                msg["id"].as_i64().unwrap(),
+                "Spectators may not chat!".to_string()))),
         }
     } else if msg["kind"].eq("disconnect") {
         let id = msg["id"].as_i64().unwrap();

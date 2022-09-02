@@ -5,16 +5,19 @@ use std::thread;
 use std::time::Duration;
 
 use delegate::delegate;
+use edit_distance::edit_distance;
 use parking_lot::{Condvar as PLCondvar, Mutex as PLMutex};
 use rand::Rng;
 use rust_scribble_common::gamestate_common::*;
-use rust_scribble_common::messages_common::{GameStateUpdate};
+use rust_scribble_common::messages_common::GameStateUpdate;
 use serde_json::{json, Value};
 
 use crate::rewardstrategy::RewardStrategy;
 
 pub(crate) const MIN_NUMBER_PLAYERS: usize = 2;
-const GAME_TIME: i64 = 500; // seconds
+const GAME_TIME: i64 = 500;
+// seconds
+const MAX_ALLOWED_EDIT_DISTANCE_FOR_ALMOST: usize = 2;
 
 pub struct LobbyState {
     state: Arc<Mutex<LobbyStateInner>>,
@@ -94,7 +97,7 @@ impl LobbyState {
             pub fn remove_player(&mut self, player_id: i64);
             pub fn set_ready(&mut self, player_id: i64, status: bool);
             pub fn all_ready(&self) -> bool;
-            pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> bool;
+            pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> GuessResult;
             pub fn all_guessed(&mut self) -> bool;
             pub fn add_client_tx(&mut self, id: i64, tx: mpsc::Sender<Value>);
             pub fn remove_client_tx(&mut self, id: i64);
@@ -135,6 +138,7 @@ struct LobbyStateInner {
     pub client_txs: BTreeMap<i64, mpsc::Sender<Value>>,
     pub reward_strategy: &'static dyn RewardStrategy,
 }
+
 
 impl LobbyStateInner {
     /// Creates a new ServerStateInner with the given word list and tx.
@@ -260,21 +264,34 @@ impl LobbyStateInner {
     ///  * `player_id` - The id of the player.
     ///  * `message` - The message received from the client.
     ///
-    pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> bool {
+    pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> GuessResult {
         let game_state = self.game_state.lock().unwrap();
         let mut players = self.players.lock().unwrap();
         let nr_players_finished = Self::calc_position_finished(&*players);
         let total_nr_of_players = players.len();
-        if game_state.in_game && game_state.word.to_lowercase().eq(&message.to_lowercase()) {
-            for player in &mut players.iter_mut() {
-                if player.id == player_id && !player.drawing && player.playing {
-                    player.guessed_word = true;
-                    self.reward_strategy.reward_points_to_player(player, total_nr_of_players, nr_players_finished);
-                    return true;
+        for player in &mut players.iter_mut() {
+            if game_state.in_game && player.id == player_id {
+                if !player.playing {
+                    return GuessResult::Spectating;
+                } else if player.drawing {
+                    return GuessResult::Drawing;
+                } else {
+                    if player.guessed_word {
+                        return GuessResult::AlreadyGuessed;
+                    }
+                    if game_state.word.to_lowercase().eq(&message.to_lowercase()) {
+                        player.guessed_word = true;
+                        self.reward_strategy.reward_points_to_player(player, total_nr_of_players, nr_players_finished);
+                        return GuessResult::Correct;
+                    }
+                    if edit_distance(&*game_state.word.to_lowercase(), &message.to_lowercase())
+                        <= MAX_ALLOWED_EDIT_DISTANCE_FOR_ALMOST {
+                        return GuessResult::Almost;
+                    }
                 }
             }
         }
-        false
+        GuessResult::Incorrect
     }
 
     fn calc_position_finished(all_players: &[Player]) -> usize {
@@ -330,4 +347,13 @@ impl LobbyStateInner {
             player.drawing = false;
         }
     }
+}
+
+pub enum GuessResult {
+    Correct,
+    Incorrect,
+    AlreadyGuessed,
+    Almost,
+    Drawing,
+    Spectating,
 }

@@ -21,6 +21,7 @@ clap = { version = "3.2.8", features = ["derive"] }
 delegate = "0.7.0"
 parking_lot = "0.12.1"
 schedule_recv = "0.1.0"
+edit-distance = "2.1.0"
 rust_scribble_common = {path = "../common"}
 
 [profile.release]

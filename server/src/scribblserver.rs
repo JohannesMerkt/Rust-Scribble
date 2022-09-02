@@ -9,7 +9,7 @@ use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
 use serde_json::Value;
 
 use crate::{handle_client, network, LobbyState};
-use crate::rewardstrategy::ExponentiallyDecreasingRewardStrategy;
+use crate::rewardstrategy::{EqualRewardStrategy, ExponentiallyDecreasingRewardStrategy};
 
 pub struct ScribblServer {
     socket: SocketAddrV4,
@@ -18,9 +18,12 @@ pub struct ScribblServer {
 }
 
 const OPTIMAL_LOBBY_SIZE: usize = 5;
-static REWARD_STRATEGY: ExponentiallyDecreasingRewardStrategy = ExponentiallyDecreasingRewardStrategy{
+static REWARD_STRATEGY_GUESSER: ExponentiallyDecreasingRewardStrategy = ExponentiallyDecreasingRewardStrategy{
     full_reward: 100,
     decrease_per_position: 0.2
+};
+static REWARD_STRATEGY_DRAWER: EqualRewardStrategy = EqualRewardStrategy {
+    full_reward: 100
 };
 
 impl ScribblServer {
@@ -110,7 +113,8 @@ impl ScribblServer {
         let (lobby_tx, lobby_rx): (Sender<Value>, Receiver<Value>) = mpsc::channel();
         let new_lobby = Arc::new(Mutex::new(LobbyState::default(
             self.words.to_vec(),
-            &REWARD_STRATEGY,
+            &REWARD_STRATEGY_GUESSER,
+            &REWARD_STRATEGY_DRAWER,
             lobby_tx,
         )));
         self.lobbies.push(new_lobby.clone());

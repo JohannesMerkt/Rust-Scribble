@@ -1,5 +1,5 @@
 use std::io::{BufRead, BufReader, Read};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, mpsc, Mutex};
 use std::time::{Duration, Instant};
 
 use chacha20poly1305::Key;
@@ -10,11 +10,11 @@ use rust_scribble_common::network_common::*;
 use serde_json::{json, Value};
 use x25519_dalek::PublicKey;
 
+use crate::lobbystate;
 use crate::lobbystate::LobbyState;
 
-const DELAY_BEFORE_GAME_START: u64 = 5;
-
-const MIN_NUMBER_PLAYERS_TO_START: usize = 2;
+const DELAY_BEFORE_GAME_START: u64 = 3; // seconds
+const MIN_TIME_BETWEEN_PINGS: u64 = 15; // seconds
 
 /// Handles a client message.
 ///
@@ -25,10 +25,13 @@ const MIN_NUMBER_PLAYERS_TO_START: usize = 2;
 /// # Returns
 /// * `Vector<Value>` - A vector of JSON value messages that shall be sent to all clients of the lobby.
 ///
-fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> {
+fn handle_message(msg: Value, lobby: &mut LobbyState) -> Vec<Value> {
     let mut msg_to_send: Vec<Value> = vec![];
 
+    // kind 'update_requested' will automatically trigger send_update = true
+    // and does not need to be handled explicitly
     let send_update = !msg["kind"].eq("update");
+    let mut clean_up_lobby = false;
 
     if msg["kind"].eq("user_init") {
         let id = msg["id"].as_i64().unwrap();
@@ -41,7 +44,7 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
         let id = msg["id"].as_i64().unwrap();
         let status = msg["ready"].as_bool().unwrap();
         lobby.set_ready(id, status);
-        if lobby.all_ready() && lobby.players().lock().unwrap().len() >= MIN_NUMBER_PLAYERS_TO_START
+        if lobby.all_ready() && lobby.players().lock().unwrap().len() >= lobbystate::MIN_NUMBER_PLAYERS
         {
             lobby.start_game_on_timer(DELAY_BEFORE_GAME_START);
         }
@@ -54,8 +57,7 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
             msg["message"].as_str().unwrap(),
         ) {
             if lobby.all_guessed() {
-                //needed to allow timer to start game again
-                lobby.end_game();
+                clean_up_lobby = true;
             }
             msg_to_send.push(json!(ChatMessage::new(
                 msg["id"].as_i64().unwrap(),
@@ -67,11 +69,21 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
     } else if msg["kind"].eq("disconnect") {
         let id = msg["id"].as_i64().unwrap();
         lobby.remove_player(id);
+        if lobby.game_state().lock().unwrap().in_game {
+            clean_up_lobby = true;
+        }
         msg_to_send.push(json!(PlayersUpdate::new(
             lobby.players().lock().unwrap().to_vec()
         )));
+    } else if msg["kind"].eq("time_up") {
+        clean_up_lobby = true;
     } else {
         msg_to_send.push(msg);
+    }
+
+    if clean_up_lobby {
+        //needed to allow timer to start game again
+        lobby.cleanup_lobby_after_end_game();
     }
 
     if send_update {
@@ -95,7 +107,7 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
 ///
 pub(crate) fn check_send_broadcast_messages(
     lobby: Arc<Mutex<LobbyState>>,
-    lobby_rx: mpsc::Receiver<serde_json::Value>,
+    lobby_rx: mpsc::Receiver<Value>,
 ) {
     loop {
         if let Ok(msg) = lobby_rx.recv() {
@@ -114,6 +126,7 @@ pub(crate) fn check_send_broadcast_messages(
     }
 }
 
+
 /// Send a JSON message to check if the client is still connected.
 ///
 /// # Arguments
@@ -125,7 +138,7 @@ pub(crate) fn check_send_broadcast_messages(
 /// * `None` - There was no ping sent.
 ///
 fn send_ping_message(net_info: &mut NetworkInfo, time_elapsed: Duration) -> Option<bool> {
-    if time_elapsed.as_secs() > 15 {
+    if time_elapsed.as_secs() > MIN_TIME_BETWEEN_PINGS {
         match send_message(net_info, &json!({"kind": "ping"})) {
             Ok(_) => Some(true),
             Err(_) => Some(false),
@@ -141,7 +154,7 @@ fn send_ping_message(net_info: &mut NetworkInfo, time_elapsed: Duration) -> Opti
 /// * `net_info` - The network information of the client.
 /// * `lobby_tx` - The channel to send messages to the broadcast thread.
 ///
-fn client_initialize(net_info: &mut NetworkInfo, lobby_tx: &mpsc::Sender<serde_json::Value>) {
+fn client_initialize(net_info: &mut NetworkInfo, lobby_tx: &mpsc::Sender<Value>) {
     let _ = net_info
         .tcp_stream
         .set_read_timeout(Some(Duration::from_millis(20)));
@@ -179,8 +192,8 @@ fn client_initialize(net_info: &mut NetworkInfo, lobby_tx: &mpsc::Sender<serde_j
 ///
 pub(crate) fn handle_client(
     mut net_info: NetworkInfo,
-    lobby_tx: mpsc::Sender<serde_json::Value>,
-    client_rx: mpsc::Receiver<serde_json::Value>,
+    lobby_tx: mpsc::Sender<Value>,
+    client_rx: mpsc::Receiver<Value>,
 ) {
     client_initialize(&mut net_info, &lobby_tx);
     let mut keepalive = Instant::now();

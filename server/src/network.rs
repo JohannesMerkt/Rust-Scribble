@@ -13,7 +13,7 @@ use x25519_dalek::PublicKey;
 use crate::lobbystate;
 use crate::lobbystate::LobbyState;
 
-const DELAY_BEFORE_GAME_START: u64 = 5; // seconds
+const DELAY_BEFORE_GAME_START: u64 = 3; // seconds
 const MIN_TIME_BETWEEN_PINGS: u64 = 15; // seconds
 
 /// Handles a client message.
@@ -28,6 +28,8 @@ const MIN_TIME_BETWEEN_PINGS: u64 = 15; // seconds
 fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> {
     let mut msg_to_send: Vec<Value> = vec![];
 
+    // kind 'update_requested' will automatically trigger send_update = true
+    // and does not need to be handled explicitly
     let send_update = !msg["kind"].eq("update");
     let mut clean_up_lobby = false;
 
@@ -75,7 +77,7 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
         )));
     } else if msg["kind"].eq("time_up") {
         clean_up_lobby = true;
-    } else {
+    } else if msg["kind"].eq("update") {
         msg_to_send.push(msg);
     }
 

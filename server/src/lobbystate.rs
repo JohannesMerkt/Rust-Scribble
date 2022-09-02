@@ -8,7 +8,7 @@ use delegate::delegate;
 use parking_lot::{Condvar as PLCondvar, Mutex as PLMutex};
 use rand::Rng;
 use rust_scribble_common::gamestate_common::*;
-use rust_scribble_common::messages_common::{GameStateUpdate, PlayersUpdate};
+use rust_scribble_common::messages_common::{GameStateUpdate};
 use serde_json::{json, Value};
 
 use crate::rewardstrategy::RewardStrategy;
@@ -44,18 +44,8 @@ impl LobbyState {
                 local_state.lock().unwrap().start_game();
                 Self::start_timer_thread(local_state.clone(), tx.clone());
                 *started = true;
-                let _ = tx.send(json!(GameStateUpdate::new(
-                    local_state
-                        .lock()
-                        .unwrap()
-                        .game_state
-                        .lock()
-                        .unwrap()
-                        .clone()
-                )));
-                let _ = tx.send(json!(PlayersUpdate::new(
-                    local_state.lock().unwrap().players.lock().unwrap().to_vec()
-                )));
+                tx.send(json!({"kind": "update_requested"}))
+                    .expect("Lobby has lost channel connection to network!");
             } // if already true, another startup thread has started the game already
             cvar.notify_all(); // other startup threads are notified and will terminate as started is already set to true
             println!(

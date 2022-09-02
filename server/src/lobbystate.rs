@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 use crate::rewardstrategy::RewardStrategy;
 
 pub(crate) const MIN_NUMBER_PLAYERS: usize = 2;
+const GAME_TIME: i64 = 500; // seconds
 
 pub struct LobbyState {
     state: Arc<Mutex<LobbyStateInner>>,
@@ -134,8 +135,6 @@ struct LobbyStateInner {
     pub client_txs: BTreeMap<i64, mpsc::Sender<Value>>,
     pub reward_strategy: &'static dyn RewardStrategy,
 }
-
-const GAME_TIME: i64 = 500; // seconds
 
 impl LobbyStateInner {
     /// Creates a new ServerStateInner with the given word list and tx.

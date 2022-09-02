@@ -77,7 +77,7 @@ fn handle_message(msg: Value, lobby: &mut LobbyState) -> Vec<Value> {
         )));
     } else if msg["kind"].eq("time_up") {
         clean_up_lobby = true;
-    } else if msg["kind"].eq("update") {
+    } else {
         msg_to_send.push(msg);
     }
 

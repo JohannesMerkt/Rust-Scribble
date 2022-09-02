@@ -75,6 +75,10 @@ impl LobbyState {
                 if !game_state.in_game { break; }
                 let new_time = game_state.time - 1;
                 game_state.time = new_time;
+                // Timer could be implemented clientside to save some network traffic,
+                // but as to not cause problems with client side code at this late stage of the
+                // project I'll implement this workaround for now
+                let _ = lobby_tx.send(json!(GameStateUpdate::new(game_state.clone())));
                 drop(game_state);
                 drop(state);
                 if new_time == 0 {

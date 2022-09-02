@@ -87,6 +87,10 @@ fn handle_message(msg: Value, lobby: &mut LobbyState) -> Vec<Value> {
         if !lobby.game_state().lock().unwrap().in_game {
             clean_up_lobby = true;
         }
+        if lobby.all_guessed() {
+            // cannot join ifs due to lock acquiring
+            clean_up_lobby = true;
+        }
         msg_to_send.push(json!(PlayersUpdate::new(
             lobby.players().lock().unwrap().to_vec()
         )));

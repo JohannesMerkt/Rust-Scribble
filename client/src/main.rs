@@ -4,7 +4,7 @@ mod network;
 mod network_plugin;
 mod ui;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, window::WindowResizeConstraints};
 use bevy_egui::{EguiContext, EguiPlugin};
 use egui::{
     style::{WidgetVisuals, Widgets},
@@ -15,6 +15,11 @@ fn main() {
     App::new()
         .insert_resource(WindowDescriptor {
             title: "Scribble".to_string(),
+            resize_constraints: WindowResizeConstraints {
+                min_width: 1200.0,
+                min_height: 600.0,
+                ..default()
+            },
             ..default()
         })
         .add_plugins(DefaultPlugins)
@@ -33,12 +38,14 @@ pub struct Textures {
     crab: TextureId,
 }
 
+// To display an image, convert it to a texture
+// should not be called in main GUI code
 fn load_images(
     mut commands: Commands,
     asset_server: ResMut<AssetServer>,
     mut egui_context: ResMut<EguiContext>,
 ) {
-    let crab_handle: Handle<Image> = asset_server.load("rustacean-flat-happy.png");
+    let crab_handle: Handle<Image> = asset_server.load("rustacean-flat-happy.png"); // pointer to image
     let textures = Textures {
         crab: egui_context.add_image(crab_handle),
     };
@@ -50,7 +57,7 @@ fn configure_visuals(mut egui_context: ResMut<EguiContext>) {
         dark_mode: false,
         widgets: Widgets {
             noninteractive: WidgetVisuals {
-                bg_fill: Color32::LIGHT_BLUE,
+                bg_fill: Color32::LIGHT_BLUE, // change background colour to light blue
                 bg_stroke: Stroke::new(1.0, Color32::from_gray(190)), // separators, indentation lines, windows outlines
                 fg_stroke: Stroke::new(1.0, Color32::from_gray(80)),  // normal text color
                 rounding: Rounding::same(2.0),

@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 pub struct ClientState {
     /// the clients stroke settings for drawing
     pub current_stroke: Stroke,
+    // current line that is drawn
     pub current_line: Option<Line>,
     /// the lines on the canvas
     pub lines: Vec<Line>,

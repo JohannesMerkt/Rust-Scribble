@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext};
-use egui::{vec2, Color32, RichText, Rounding};
+use egui::style::{WidgetVisuals, Widgets};
+use egui::{containers::Frame, vec2, Color32, RichText, Rounding};
+use egui::{Stroke, Visuals};
 use rayon::prelude::*;
 use regex::Regex;
 
@@ -72,11 +74,14 @@ fn render_lobby_view(
     networkstate: &mut ResMut<network_plugin::NetworkState>,
     clientstate: &mut ResMut<ClientState>,
 ) {
-    egui::SidePanel::right("side_panel").show(egui_context.ctx_mut(), |ui| {
-        render_game_time(ui, clientstate);
-        render_player_list(ui, networkstate, clientstate);
-        render_chat_area(ui, networkstate, clientstate);
-    });
+    egui::SidePanel::right("side_panel")
+        .resizable(false)
+        .min_width(100.0)
+        .show(egui_context.ctx_mut(), |ui| {
+            render_game_time(ui, clientstate);
+            render_player_list(ui, networkstate, clientstate);
+            render_chat_area(ui, networkstate, clientstate);
+        });
 
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         ui.label(egui::RichText::new("Lobby").font(egui::FontId::proportional(40.0)));
@@ -104,22 +109,25 @@ fn render_lobby_view(
 /// * `egui_context` - The egui context used for rendering the egui
 /// * `networkstate` - Holding information about the connection to a server
 /// * `clientstate` - The state of the client holding information about the gamestate, canvas lines, chat messages and players in the game
-///
+
 fn render_ingame_view(
     egui_context: &mut ResMut<EguiContext>,
     networkstate: &mut ResMut<network_plugin::NetworkState>,
     clientstate: &mut ResMut<ClientState>,
 ) {
-    egui::SidePanel::right("side_panel").show(egui_context.ctx_mut(), |ui| {
-        render_game_time(ui, clientstate);
-        render_player_list(ui, networkstate, clientstate);
-        render_chat_area(ui, networkstate, clientstate);
+    egui::SidePanel::right("side_panel")
+        .min_width(100.0)
+        .resizable(false)
+        .show(egui_context.ctx_mut(), |ui| {
+            render_game_time(ui, clientstate);
+            render_player_list(ui, networkstate, clientstate);
+            render_chat_area(ui, networkstate, clientstate);
 
-        if ui.button("Disconnect").clicked() {
-            network_plugin::send_disconnect(networkstate);
-            //TODO change back to main screen
-        }
-    });
+            if ui.button("Disconnect").clicked() {
+                network_plugin::send_disconnect(networkstate);
+                //TODO change back to main screen
+            }
+        });
 
     let net_info = networkstate.info.as_ref().unwrap();
     //TODO FIX: This is dangerous at the moment Thread Panic!
@@ -130,10 +138,10 @@ fn render_ingame_view(
         .unwrap()
         .drawing;
 
+    // The central panel the region left after adding TopPanel's and SidePanel's
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         if is_drawer {
             ui.label("Paint the word with mouse/touch!".to_string());
-            // The central panel the region left after adding TopPanel's and SidePanel's
             ui.horizontal(|ui| {
                 let colors: Vec<Color32> = vec![
                     Color32::YELLOW,
@@ -214,53 +222,63 @@ fn render_ingame_view(
         egui::Frame::canvas(ui.style()).show(ui, |ui| {
             let (mut response, painter) =
                 ui.allocate_painter(ui.available_size_before_wrap(), egui::Sense::drag());
-            painter.rect_filled(response.rect, Rounding::none(), Color32::WHITE);
+            // painter.rect_filled(response.rect, Rounding::none(), Color32::WHITE);
+            let my_group = egui::containers::Frame {
+                fill: Color32::from_rgb(193, 225, 236),
+                ..default()
+            };
+            my_group.show(ui, |ui| {
+                let to_screen = egui::emath::RectTransform::from_to(
+                    egui::Rect::from_min_size(egui::Pos2::ZERO, response.rect.square_proportions()),
+                    response.rect,
+                );
+                let from_screen = to_screen.inverse();
 
-            let to_screen = egui::emath::RectTransform::from_to(
-                egui::Rect::from_min_size(egui::Pos2::ZERO, response.rect.square_proportions()),
-                response.rect,
-            );
-            let from_screen = to_screen.inverse();
+                if is_drawer {
+                    // Start drawing
+                    if response.drag_started() {
+                        clientstate.current_line = Option::Some(Line {
+                            positions: vec![],
+                            stroke: clientstate.current_stroke,
+                        });
+                    };
 
-            if is_drawer {
-                if response.drag_started() {
-                    clientstate.current_line = Option::Some(Line {
-                        positions: vec![],
-                        stroke: clientstate.current_stroke,
-                    });
-                };
-
-                if let Some(pointer_pos) = response.interact_pointer_pos() {
-                    if let Some(unw_current_line) = clientstate.current_line.as_mut() {
-                        let canvas_pos = from_screen * pointer_pos;
-                        if unw_current_line.positions.last() != Some(&canvas_pos) {
-                            unw_current_line.positions.push(canvas_pos);
-                            response.mark_changed();
+                    // As long as the mouse is not lifted, add new positions to current line
+                    if let Some(pointer_pos) = response.interact_pointer_pos() {
+                        if let Some(unwrap_current_line) = clientstate.current_line.as_mut() {
+                            let canvas_pos = from_screen * pointer_pos;
+                            if unwrap_current_line.positions.last() != Some(&canvas_pos) {
+                                unwrap_current_line.positions.push(canvas_pos);
+                                response.mark_changed();
+                            }
                         }
                     }
+                    // Send new line when line is finished
+                    if response.drag_released() && clientstate.current_line.is_some() {
+                        network_plugin::send_line(
+                            networkstate,
+                            clientstate.current_line.as_ref().unwrap(),
+                        );
+                        clientstate.current_line = Option::None;
+                    }
                 }
-                if response.drag_released() && clientstate.current_line.is_some() {
-                    network_plugin::send_line(
-                        networkstate,
-                        clientstate.current_line.as_ref().unwrap(),
-                    );
-                    clientstate.current_line = Option::None;
+                let mut shapes = vec![];
+                // Connect all positions for each line
+                // egui is immediate, therefore draw all lines
+                for line in clientstate
+                    .lines
+                    .iter()
+                    .chain(clientstate.current_line.iter())
+                {
+                    if line.positions.len() >= 2 {
+                        let points: Vec<egui::Pos2> =
+                            line.positions.par_iter().map(|p| to_screen * *p).collect();
+                        shapes.push(egui::Shape::line(points, line.stroke));
+                    }
                 }
-            }
-            let mut shapes = vec![];
-            for line in clientstate
-                .lines
-                .iter()
-                .chain(clientstate.current_line.iter())
-            {
-                if line.positions.len() >= 2 {
-                    let points: Vec<egui::Pos2> =
-                        line.positions.par_iter().map(|p| to_screen * *p).collect();
-                    shapes.push(egui::Shape::line(points, line.stroke));
-                }
-            }
-            painter.extend(shapes);
-            response
+                painter.extend(shapes);
+                response
+            });
         });
     });
 }
@@ -277,7 +295,11 @@ fn render_chat_area(
     networkstate: &mut ResMut<network_plugin::NetworkState>,
     clientstate: &mut ResMut<ClientState>,
 ) {
-    ui.group(|ui| {
+    let my_group = egui::containers::Frame {
+        fill: Color32::from_rgb(193, 225, 236),
+        ..default()
+    };
+    my_group.show(ui, |ui| {
         ui.heading("Chat");
         let text_style = egui::TextStyle::Body;
         let row_height = ui.text_style_height(&text_style);

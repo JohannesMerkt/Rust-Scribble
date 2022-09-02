@@ -135,6 +135,8 @@ struct LobbyStateInner {
     pub reward_strategy: &'static dyn RewardStrategy,
 }
 
+const GAME_TIME: i64 = 500; // seconds
+
 impl LobbyStateInner {
     /// Creates a new ServerStateInner with the given word list and tx.
     ///
@@ -300,7 +302,7 @@ impl LobbyStateInner {
         let mut game_state = self.game_state.lock().unwrap();
         let mut players = self.players.lock().unwrap();
         game_state.in_game = true;
-        game_state.time = 500;
+        game_state.time = GAME_TIME;
         let drawer_index = rand::thread_rng().gen_range(0, players.len());
         for (index, player) in (&mut players.iter_mut()).enumerate() {
             if drawer_index == index {

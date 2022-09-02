@@ -21,7 +21,7 @@ pub struct LobbyState {
 }
 
 impl LobbyState {
-    pub fn default(words: Vec<String>, reward_strategy: &'static dyn RewardStrategy, lobby_tx: mpsc::Sender<serde_json::Value>) -> Self {
+    pub fn default(words: Vec<String>, reward_strategy: &'static dyn RewardStrategy, lobby_tx: mpsc::Sender<Value>) -> Self {
         LobbyState {
             state: Arc::new(Mutex::new(LobbyStateInner::default(words, reward_strategy, lobby_tx))),
             started_lock: Arc::new((PLMutex::new(false), PLCondvar::new())),
@@ -113,7 +113,7 @@ impl LobbyState {
     pub fn _word_list(&self) -> Arc<Mutex<Vec<String>>> {
         self.state.lock().unwrap().word_list.clone()
     }
-    pub fn lobby_tx(&self) -> mpsc::Sender<serde_json::Value> {
+    pub fn lobby_tx(&self) -> mpsc::Sender<Value> {
         self.state.lock().unwrap().lobby_tx.clone()
     }
     pub fn client_tx(&self) -> BTreeMap<i64, mpsc::Sender<Value>> {
@@ -130,7 +130,7 @@ struct LobbyStateInner {
     pub game_state: Arc<Mutex<GameState>>,
     pub players: Arc<Mutex<Vec<Player>>>,
     pub word_list: Arc<Mutex<Vec<String>>>,
-    pub lobby_tx: mpsc::Sender<serde_json::Value>,
+    pub lobby_tx: mpsc::Sender<Value>,
     pub client_txs: BTreeMap<i64, mpsc::Sender<Value>>,
     pub reward_strategy: &'static dyn RewardStrategy,
 }
@@ -145,7 +145,7 @@ impl LobbyStateInner {
     ///   * `lobby_tx` - The tx mpsc to send updates to the clients.
     ///   * `reward_strategy` - The reward strategy to use for the game.
     /// It determines how points are awarded for correct guesses.
-    pub fn default(words: Vec<String>, reward_strategy: &'static dyn RewardStrategy, lobby_tx: mpsc::Sender<serde_json::Value>) -> Self {
+    pub fn default(words: Vec<String>, reward_strategy: &'static dyn RewardStrategy, lobby_tx: mpsc::Sender<Value>) -> Self {
         LobbyStateInner {
             game_state: Arc::new(Mutex::new(GameState::default())),
             players: Arc::new(Mutex::new(Vec::new())),

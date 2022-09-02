@@ -25,7 +25,7 @@ const MIN_TIME_BETWEEN_PINGS: u64 = 15; // seconds
 /// # Returns
 /// * `Vector<Value>` - A vector of JSON value messages that shall be sent to all clients of the lobby.
 ///
-fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> {
+fn handle_message(msg: Value, lobby: &mut LobbyState) -> Vec<Value> {
     let mut msg_to_send: Vec<Value> = vec![];
 
     // kind 'update_requested' will automatically trigger send_update = true
@@ -107,7 +107,7 @@ fn handle_message(msg: serde_json::Value, lobby: &mut LobbyState) -> Vec<Value> 
 ///
 pub(crate) fn check_send_broadcast_messages(
     lobby: Arc<Mutex<LobbyState>>,
-    lobby_rx: mpsc::Receiver<serde_json::Value>,
+    lobby_rx: mpsc::Receiver<Value>,
 ) {
     loop {
         if let Ok(msg) = lobby_rx.recv() {
@@ -154,7 +154,7 @@ fn send_ping_message(net_info: &mut NetworkInfo, time_elapsed: Duration) -> Opti
 /// * `net_info` - The network information of the client.
 /// * `lobby_tx` - The channel to send messages to the broadcast thread.
 ///
-fn client_initialize(net_info: &mut NetworkInfo, lobby_tx: &mpsc::Sender<serde_json::Value>) {
+fn client_initialize(net_info: &mut NetworkInfo, lobby_tx: &mpsc::Sender<Value>) {
     let _ = net_info
         .tcp_stream
         .set_read_timeout(Some(Duration::from_millis(20)));
@@ -192,8 +192,8 @@ fn client_initialize(net_info: &mut NetworkInfo, lobby_tx: &mpsc::Sender<serde_j
 ///
 pub(crate) fn handle_client(
     mut net_info: NetworkInfo,
-    lobby_tx: mpsc::Sender<serde_json::Value>,
-    client_rx: mpsc::Receiver<serde_json::Value>,
+    lobby_tx: mpsc::Sender<Value>,
+    client_rx: mpsc::Receiver<Value>,
 ) {
     client_initialize(&mut net_info, &lobby_tx);
     let mut keepalive = Instant::now();

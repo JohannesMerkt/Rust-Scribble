@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 use crate::rewardstrategy::{RewardStrategyDrawer, RewardStrategyGuesser};
 
 pub(crate) const MIN_NUMBER_PLAYERS: usize = 2;
-const GAME_TIME: i64 = 500;
+pub(crate) const GAME_TIME: i64 = 500;
 // seconds
 const MAX_ALLOWED_EDIT_DISTANCE_FOR_ALMOST: usize = 2;
 
@@ -292,7 +292,11 @@ impl LobbyStateInner {
                     result = GuessResult::AlreadyGuessed;
                 } else if game_state.word.to_lowercase().eq(&message.to_lowercase()) {
                     player.guessed_word = true;
-                    self.reward_strategy_guesser.reward_points_to_guesser(player, number_of_guessers, nr_players_finished);
+                    self.reward_strategy_guesser.reward_points_to_guesser(
+                        player,
+                        number_of_guessers,
+                        nr_players_finished,
+                        game_state.time);
                     result = GuessResult::Correct;
                 } else if edit_distance(&*game_state.word.to_lowercase(), &message.to_lowercase())
                     <= MAX_ALLOWED_EDIT_DISTANCE_FOR_ALMOST {
@@ -302,7 +306,11 @@ impl LobbyStateInner {
         }
         if result == GuessResult::Correct {
             let drawer = players.iter_mut().find(|player| player.drawing).unwrap();
-            self.reward_strategy_drawer.reward_points_to_drawer(drawer, number_of_guessers, nr_players_finished);
+            self.reward_strategy_drawer.reward_points_to_drawer(
+                drawer,
+                number_of_guessers,
+                nr_players_finished,
+                game_state.time);
         }
         result
     }

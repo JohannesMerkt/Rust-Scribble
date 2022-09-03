@@ -123,13 +123,17 @@ fn render_ingame_view(
 
             if ui.button("Disconnect").clicked() {
                 network_plugin::send_disconnect(networkstate);
-                //TODO change back to main screen
+                networkstate.info = None;
             }
         });
 
+    if !networkstate.info.is_some() {
+        return;
+    }
+
     let net_info = networkstate.info.as_ref().unwrap();
-    let mut is_drawer = false;
-    let mut has_guessed = false;
+    let mut is_drawer: bool = false;
+    let mut has_guessed: bool = false;
     if let Some(player) = clientstate
         .players
         .iter()
@@ -323,8 +327,12 @@ fn render_chat_area(
                         .find_any(|player| player.id == chat_message.id);
                     if let Some(player) = search_player_result {
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new(player.name.clone() + ": ").color(player.color).strong());
-                            ui.label(format!("{}" , chat_message.message));
+                            ui.label(
+                                RichText::new(player.name.clone() + ": ")
+                                    .color(player.color)
+                                    .strong(),
+                            );
+                            ui.label(chat_message.message.to_string());
                         });
                         ui.set_min_width(100.0);
                     }

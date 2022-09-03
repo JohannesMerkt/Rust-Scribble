@@ -2,11 +2,10 @@
 
 A client/server scribble game written in Rust.
 ### Features
- * Draw in multiple colours and sizes and erase mistakes easily
+ * Draw in multiple colours, sizes and erase mistakes easily
  * Chat between users and correctly guessed words are not shown
  * Concurrent lobbies/games on a single server
- * Configurable words and gameplay
- * Server port is configurable
+ * Configurable port and word list
  * Network connection is end-to-end encrypted by default 
 
 ---
@@ -23,7 +22,6 @@ The server can be configured on the command line. They can be used individually 
 The options available are
 * ```--port``` : Port number 
 * ```--words```: Word list file
-* ```--time```: Length of game (seconds)
 
 To use the command line configuration simply use
 ```bash

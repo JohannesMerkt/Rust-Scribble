@@ -1,9 +1,9 @@
 palm trees
 tulips
-pine cone
-space ship
-box of candy
-sunflowers in a vase
+pinecone
+spaceship
+candy
+sunflowers
 koala bear
 angry dog
 candy corn
@@ -12,8 +12,8 @@ sleepy tiger
 pizza
 snake charmer
 hula girl
-ice cream cone
-bottle of poison
+ice cream
+poison
 flamingo
 football
 fried egg

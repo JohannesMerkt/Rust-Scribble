@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use egui::{Pos2, Stroke, Color32};
-use random_color::RandomColor;
+use egui::{Color32, Pos2, Stroke};
+use random_color::{RandomColor, Luminosity::Bright};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Line {
@@ -31,7 +31,7 @@ pub struct Player {
 
 impl Player {
     pub fn new(id: i64, name: String) -> Self {
-        let player_color = RandomColor::new().to_rgb_array();
+        let player_color = RandomColor::new().luminosity(Bright).to_rgb_array();
         Player {
             id,
             name,
@@ -40,7 +40,7 @@ impl Player {
             drawing: false,
             playing: false,
             guessed_word: false,
-            color: Color32::from_rgb(player_color[0], player_color[1], player_color[2])
+            color: Color32::from_rgb(player_color[0], player_color[1], player_color[2]),
         }
     }
 }

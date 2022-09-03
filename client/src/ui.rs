@@ -44,15 +44,19 @@ fn render_connect_view(
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
         ui.vertical_centered(|ui| {
             ui.add_space(100.0);
+            ui.heading(RichText::new("Draw or Guess").monospace().size(36.0));
             ui.image(textures.crab, 0.2 * vec2(1200.0, 800.0));
             ui.heading("Rust Scribble:");
             ui.label("Name");
             ui.text_edit_singleline(&mut networkstate.name);
+            ui.add_space(20.0);
             ui.label("Server Address");
             ui.text_edit_singleline(&mut networkstate.address);
+            ui.add_space(20.0);
             ui.label("Server Port");
             ui.add(egui::widgets::DragValue::new(&mut networkstate.port).speed(1.0));
-            if ui.button("Connect").clicked() || ui.input().key_pressed(egui::Key::Enter) {
+            ui.add_space(40.0);
+            if ui.button(RichText::new("Connect").color(Color32::DARK_GRAY).size(28.0)).clicked() || ui.input().key_pressed(egui::Key::Enter) {
                 // connect to the server
                 network_plugin::connect(networkstate);
             }
@@ -323,8 +327,12 @@ fn render_chat_area(
                         .find_any(|player| player.id == chat_message.id);
                     if let Some(player) = search_player_result {
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new(player.name.clone() + ": ").color(player.color).monospace());
-                            ui.label(format!("{}" , chat_message.message));
+                            ui.label(
+                                RichText::new(player.name.clone() + ": ")
+                                    .color(player.color)
+                                    .monospace(),
+                            );
+                            ui.label(format!("{}", chat_message.message));
                         });
                         ui.set_min_width(100.0);
                     }

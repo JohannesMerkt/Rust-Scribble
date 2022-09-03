@@ -323,8 +323,12 @@ fn render_chat_area(
                         .find_any(|player| player.id == chat_message.id);
                     if let Some(player) = search_player_result {
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new(player.name.clone() + ": ").color(player.color).strong());
-                            ui.label(format!("{}" , chat_message.message));
+                            ui.label(
+                                RichText::new(player.name.clone() + ": ")
+                                    .color(player.color)
+                                    .strong(),
+                            );
+                            ui.label(chat_message.message.to_string());
                         });
                         ui.set_min_width(100.0);
                     }

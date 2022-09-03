@@ -128,13 +128,16 @@ fn render_ingame_view(
         });
 
     let net_info = networkstate.info.as_ref().unwrap();
-    //TODO FIX: This is dangerous at the moment Thread Panic!
-    let is_drawer = clientstate
+    let mut is_drawer = false;
+    let mut has_guessed = false;
+    if let Some(player) = clientstate
         .players
         .iter()
         .find(|player| player.id == net_info.id)
-        .unwrap()
-        .drawing;
+    {
+        is_drawer = player.drawing;
+        has_guessed = player.guessed_word;
+    }
 
     // The central panel the region left after adding TopPanel's and SidePanel's
     egui::CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
@@ -208,13 +211,20 @@ fn render_ingame_view(
             });
         } else {
             ui.label("Guess the word!");
-            ui.label(
-                egui::RichText::new(format!(
-                    "Word: {}",
-                    get_word_as_underscores(&clientstate.game_state.word)
-                ))
-                .font(egui::FontId::proportional(40.0)),
-            );
+            if !has_guessed {
+                ui.label(
+                    egui::RichText::new(format!(
+                        "Word: {}",
+                        get_word_as_underscores(&clientstate.game_state.word)
+                    ))
+                    .font(egui::FontId::proportional(40.0)),
+                );
+            } else {
+                ui.label(
+                    egui::RichText::new(format!("Word: {}", clientstate.game_state.word))
+                        .font(egui::FontId::proportional(40.0)),
+                );
+            }
         }
 
         egui::Frame::canvas(ui.style()).show(ui, |ui| {
@@ -225,7 +235,7 @@ fn render_ingame_view(
                 fill: Color32::from_rgb(193, 225, 236),
                 ..default()
             };
-            my_group.show(ui, |ui| {
+            my_group.show(ui, |_ui| {
                 let to_screen = egui::emath::RectTransform::from_to(
                     egui::Rect::from_min_size(egui::Pos2::ZERO, response.rect.square_proportions()),
                     response.rect,

@@ -1,6 +1,11 @@
 [package]
 name = "rust_scribble_common"
-version = "0.1.0"
+version = "1.0.0"
+authors = ["Anna Thum <A.Thum@campus.lmu.de>",
+"Johannes Merkt <Johannes.Merkt@campus.lmu.de>",
+"(Julien Cardinal) <Julien.Cardinal@campus.lmu.de>",
+"Leonard Ganz <Leonard.Ganz@campus.lmu.de>",
+"Terence Stenvold <Terence.Stenvold@campus.lmu.de>"]
 edition = "2021"
 
 [features]

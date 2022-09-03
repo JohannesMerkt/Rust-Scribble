@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 use crate::rewardstrategy::{RewardStrategyDrawer, RewardStrategyGuesser};
 
 pub(crate) const MIN_NUMBER_PLAYERS: usize = 2;
-pub(crate) const GAME_TIME: i64 = 500;
+pub(crate) const GAME_TIME: i64 = 120;
 // seconds
 const MAX_ALLOWED_EDIT_DISTANCE_FOR_ALMOST: usize = 2;
 
@@ -102,6 +102,7 @@ impl LobbyState {
             pub fn remove_player(&mut self, player_id: i64);
             pub fn set_ready(&mut self, player_id: i64, status: bool);
             pub fn all_ready(&self) -> bool;
+            pub fn add_line_msg(&mut self, line_msg: Value);
             pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> GuessResult;
             pub fn all_guessed(&mut self) -> bool;
             pub fn add_client_tx(&mut self, id: i64, tx: mpsc::Sender<Value>);
@@ -138,6 +139,7 @@ impl LobbyState {
 struct LobbyStateInner {
     pub game_state: Arc<Mutex<GameState>>,
     pub players: Arc<Mutex<Vec<Player>>>,
+    pub lines: Arc<Mutex<Vec<Value>>>,
     pub word_list: Arc<Mutex<Vec<String>>>,
     pub lobby_tx: mpsc::Sender<Value>,
     pub client_txs: BTreeMap<i64, mpsc::Sender<Value>>,
@@ -163,6 +165,7 @@ impl LobbyStateInner {
         LobbyStateInner {
             game_state: Arc::new(Mutex::new(GameState::default())),
             players: Arc::new(Mutex::new(Vec::new())),
+            lines: Arc::new(Mutex::new(Vec::new())),
             word_list: Arc::new(Mutex::new(words)),
             lobby_tx,
             client_txs: BTreeMap::new(),
@@ -177,7 +180,10 @@ impl LobbyStateInner {
     ///   * `id` - The id of the player.
     ///   * `tx` - The tx mpsc to send updates to the clients.
     pub fn add_client_tx(&mut self, id: i64, tx: mpsc::Sender<Value>) {
-        self.client_txs.insert(id, tx);
+        self.client_txs.insert(id, tx.clone());
+        if self.game_state.lock().unwrap().in_game {
+            self.lines.lock().unwrap().iter().for_each(|msg| tx.send(msg.clone()).unwrap());
+        }
     }
 
     /// Removes a client tx from the game and removes the player id.
@@ -270,6 +276,10 @@ impl LobbyStateInner {
         false
     }
 
+    pub fn add_line_msg(&mut self, line_msg: Value) {
+        self.lines.lock().unwrap().push(line_msg)
+    }
+
     /// Check if the message received from the client is a valid guess or chat message.
     ///
     /// # Arguments
@@ -279,8 +289,9 @@ impl LobbyStateInner {
     pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> GuessResult {
         let game_state = self.game_state.lock().unwrap();
         let mut players = self.players.lock().unwrap();
-        let nr_players_finished = Self::calc_position_finished(&*players);
-        let number_of_guessers = players.len() - 1;
+        let nr_players_finished = players.iter().filter(|p| p.guessed_word).count();
+        let number_of_guessers = players.iter().filter(
+            |player| !player.drawing && player.playing).count();
         let mut result = GuessResult::Incorrect;
         for player in &mut players.iter_mut() {
             if game_state.in_game && player.id == player_id {
@@ -313,10 +324,6 @@ impl LobbyStateInner {
                 game_state.time);
         }
         result
-    }
-
-    fn calc_position_finished(all_players: &[Player]) -> usize {
-        all_players.iter().filter(|p| p.guessed_word).count()
     }
 
     /// Gets a new random word from the word list and removes it from the word list.
@@ -367,6 +374,7 @@ impl LobbyStateInner {
             player.ready = false;
             player.drawing = false;
         }
+        self.lines.lock().unwrap().clear();
     }
 }
 

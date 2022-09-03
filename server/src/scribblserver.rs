@@ -8,8 +8,8 @@ use chacha20poly1305::Key;
 use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
 use serde_json::Value;
 
-use crate::{handle_client, LobbyState, network};
-use crate::rewardstrategy::{EqualRewardStrategy, ExponentiallyDecreasingRewardStrategy};
+use crate::{handle_client, LobbyState, lobbystate, network};
+use crate::rewardstrategy::{EqualRewardStrategy, TimeBasedRewardStrategy};
 
 pub struct ScribblServer {
     socket: SocketAddrV4,
@@ -18,9 +18,9 @@ pub struct ScribblServer {
 }
 
 const OPTIMAL_LOBBY_SIZE: usize = 5;
-static REWARD_STRATEGY_GUESSER: ExponentiallyDecreasingRewardStrategy = ExponentiallyDecreasingRewardStrategy {
+static REWARD_STRATEGY_GUESSER: TimeBasedRewardStrategy = TimeBasedRewardStrategy {
     full_reward: 100,
-    decrease_per_position: 0.2,
+    initial_time: lobbystate::GAME_TIME,
 };
 static REWARD_STRATEGY_DRAWER: EqualRewardStrategy = EqualRewardStrategy {
     full_reward: 100

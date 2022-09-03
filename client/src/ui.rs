@@ -123,7 +123,7 @@ fn render_ingame_view(
 
             if ui.button("Disconnect").clicked() {
                 network_plugin::send_disconnect(networkstate);
-                //TODO change back to main screen
+                networkstate.info = None;
             }
         });
 

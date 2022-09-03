@@ -127,9 +127,13 @@ fn render_ingame_view(
             }
         });
 
+    if !networkstate.info.is_some() {
+        return;
+    }
+
     let net_info = networkstate.info.as_ref().unwrap();
-    let mut is_drawer = false;
-    let mut has_guessed = false;
+    let mut is_drawer: bool = false;
+    let mut has_guessed: bool = false;
     if let Some(player) = clientstate
         .players
         .iter()

@@ -88,7 +88,6 @@ fn render_lobby_view(
         .resizable(false)
         .min_width(100.0)
         .show(egui_context.ctx_mut(), |ui| {
-            render_game_time(ui, clientstate);
             render_player_list(ui, networkstate, clientstate);
             render_chat_area(ui, networkstate, clientstate);
         });

@@ -1,5 +1,5 @@
 use std::io::{BufRead, BufReader, Read};
-use std::sync::{Arc, mpsc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use chacha20poly1305::Key;
@@ -45,7 +45,8 @@ fn handle_message(msg: Value, lobby: &mut LobbyState) -> Vec<Value> {
         let id = msg["id"].as_i64().unwrap();
         let status = msg["ready"].as_bool().unwrap();
         lobby.set_ready(id, status);
-        if lobby.all_ready() && lobby.players().lock().unwrap().len() >= lobbystate::MIN_NUMBER_PLAYERS
+        if lobby.all_ready()
+            && lobby.players().lock().unwrap().len() >= lobbystate::MIN_NUMBER_PLAYERS
         {
             lobby.start_game_on_timer(DELAY_BEFORE_GAME_START);
         }
@@ -63,23 +64,27 @@ fn handle_message(msg: Value, lobby: &mut LobbyState) -> Vec<Value> {
                     clean_up_lobby = true;
                 }
                 msg_to_send.push(json!(ChatMessage::new(
-                msg["id"].as_i64().unwrap(),
-                "Guessed the word correctly!".to_string()
-            )));
+                    msg["id"].as_i64().unwrap(),
+                    "Guessed the word correctly!".to_string()
+                )));
             }
             GuessResult::Incorrect => msg_to_send.push(msg),
             GuessResult::AlreadyGuessed => msg_to_send.push(json!(ChatMessage::new(
                 msg["id"].as_i64().unwrap(),
-                "Already guessed correctly!".to_string()))),
+                "Already guessed correctly!".to_string()
+            ))),
             GuessResult::Almost => msg_to_send.push(json!(ChatMessage::new(
                 msg["id"].as_i64().unwrap(),
-                "Close!".to_string()))),
+                "Close!".to_string()
+            ))),
             GuessResult::Drawing => msg_to_send.push(json!(ChatMessage::new(
                 msg["id"].as_i64().unwrap(),
-                "Drawer may not chat!".to_string()))),
+                "Drawer may not chat!".to_string()
+            ))),
             GuessResult::Spectating => msg_to_send.push(json!(ChatMessage::new(
                 msg["id"].as_i64().unwrap(),
-                "Spectators may not chat!".to_string()))),
+                "Spectators may not chat!".to_string()
+            ))),
         }
     } else if msg["kind"].eq("disconnect") {
         let id = msg["id"].as_i64().unwrap();
@@ -149,7 +154,6 @@ pub(crate) fn check_send_broadcast_messages(
         }
     }
 }
-
 
 /// Send a JSON message to check if the client is still connected.
 ///

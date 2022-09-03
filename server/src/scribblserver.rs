@@ -1,15 +1,15 @@
 use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener};
-use std::sync::{Arc, mpsc, Mutex};
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
 use chacha20poly1305::Key;
 use rust_scribble_common::network_common::{generate_keypair, NetworkInfo};
 use serde_json::Value;
 
-use crate::{handle_client, LobbyState, lobbystate, network};
 use crate::rewardstrategy::{EqualRewardStrategy, TimeBasedRewardStrategy};
+use crate::{handle_client, lobbystate, network, LobbyState};
 
 pub struct ScribblServer {
     socket: SocketAddrV4,
@@ -22,9 +22,7 @@ static REWARD_STRATEGY_GUESSER: TimeBasedRewardStrategy = TimeBasedRewardStrateg
     full_reward: 100,
     initial_time: lobbystate::GAME_TIME,
 };
-static REWARD_STRATEGY_DRAWER: EqualRewardStrategy = EqualRewardStrategy {
-    full_reward: 100
-};
+static REWARD_STRATEGY_DRAWER: EqualRewardStrategy = EqualRewardStrategy { full_reward: 100 };
 
 impl ScribblServer {
     /// Initialize the server with the given ip and port.

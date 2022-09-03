@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -25,14 +25,19 @@ pub struct LobbyState {
 }
 
 impl LobbyState {
-    pub fn default(words: Vec<String>,
-                   reward_strategy_guesser: &'static dyn RewardStrategyGuesser,
-                   reward_strategy_drawer: &'static dyn RewardStrategyDrawer,
-                   lobby_tx: mpsc::Sender<Value>)
-                   -> Self {
+    pub fn default(
+        words: Vec<String>,
+        reward_strategy_guesser: &'static dyn RewardStrategyGuesser,
+        reward_strategy_drawer: &'static dyn RewardStrategyDrawer,
+        lobby_tx: mpsc::Sender<Value>,
+    ) -> Self {
         LobbyState {
             state: Arc::new(Mutex::new(LobbyStateInner::default(
-                words, reward_strategy_guesser, reward_strategy_drawer, lobby_tx))),
+                words,
+                reward_strategy_guesser,
+                reward_strategy_drawer,
+                lobby_tx,
+            ))),
             started_lock: Arc::new((PLMutex::new(false), PLCondvar::new())),
         }
     }
@@ -71,7 +76,9 @@ impl LobbyState {
                 tick.recv().unwrap();
                 let state = state_ref.lock().unwrap();
                 let mut game_state = state.game_state.lock().unwrap();
-                if !game_state.in_game { break; }
+                if !game_state.in_game {
+                    break;
+                }
                 let new_time = game_state.time - 1;
                 game_state.time = new_time;
                 // Timer could be implemented clientside to save some network traffic,
@@ -84,7 +91,8 @@ impl LobbyState {
                     let mut state = state_ref.lock().unwrap();
                     state.end_game();
                     drop(state);
-                    lobby_tx.send(json!({"kind": "time_up"}))
+                    lobby_tx
+                        .send(json!({"kind": "time_up"}))
                         .expect("Lobby has lost channel connection to network!");
                     break;
                 }
@@ -147,7 +155,6 @@ struct LobbyStateInner {
     pub reward_strategy_drawer: &'static dyn RewardStrategyDrawer,
 }
 
-
 impl LobbyStateInner {
     /// Creates a new ServerStateInner with the given word list and tx.
     ///
@@ -157,11 +164,12 @@ impl LobbyStateInner {
     ///   * `reward_strategy_guesser` - The reward strategy used to award points to guessers.
     ///   * `reward_strategy_drawer` - The reward strategy used to award points to the drawer.
     /// It determines how points are awarded for correct guesses.
-    pub fn default(words: Vec<String>,
-                   reward_strategy_guesser: &'static dyn RewardStrategyGuesser,
-                   reward_strategy_drawer: &'static dyn RewardStrategyDrawer,
-                   lobby_tx: mpsc::Sender<Value>)
-                   -> Self {
+    pub fn default(
+        words: Vec<String>,
+        reward_strategy_guesser: &'static dyn RewardStrategyGuesser,
+        reward_strategy_drawer: &'static dyn RewardStrategyDrawer,
+        lobby_tx: mpsc::Sender<Value>,
+    ) -> Self {
         LobbyStateInner {
             game_state: Arc::new(Mutex::new(GameState::default())),
             players: Arc::new(Mutex::new(Vec::new())),
@@ -182,7 +190,11 @@ impl LobbyStateInner {
     pub fn add_client_tx(&mut self, id: i64, tx: mpsc::Sender<Value>) {
         self.client_txs.insert(id, tx.clone());
         if self.game_state.lock().unwrap().in_game {
-            self.lines.lock().unwrap().iter().for_each(|msg| tx.send(msg.clone()).unwrap());
+            self.lines
+                .lock()
+                .unwrap()
+                .iter()
+                .for_each(|msg| tx.send(msg.clone()).unwrap());
         }
     }
 
@@ -290,8 +302,10 @@ impl LobbyStateInner {
         let game_state = self.game_state.lock().unwrap();
         let mut players = self.players.lock().unwrap();
         let nr_players_finished = players.iter().filter(|p| p.guessed_word).count();
-        let number_of_guessers = players.iter().filter(
-            |player| !player.drawing && player.playing).count();
+        let number_of_guessers = players
+            .iter()
+            .filter(|player| !player.drawing && player.playing)
+            .count();
         let mut result = GuessResult::Incorrect;
         for player in &mut players.iter_mut() {
             if game_state.in_game && player.id == player_id {
@@ -307,10 +321,12 @@ impl LobbyStateInner {
                         player,
                         number_of_guessers,
                         nr_players_finished,
-                        game_state.time);
+                        game_state.time,
+                    );
                     result = GuessResult::Correct;
                 } else if edit_distance(&*game_state.word.to_lowercase(), &message.to_lowercase())
-                    <= MAX_ALLOWED_EDIT_DISTANCE_FOR_ALMOST {
+                    <= MAX_ALLOWED_EDIT_DISTANCE_FOR_ALMOST
+                {
                     result = GuessResult::Almost;
                 }
             }
@@ -321,7 +337,8 @@ impl LobbyStateInner {
                 drawer,
                 number_of_guessers,
                 nr_players_finished,
-                game_state.time);
+                game_state.time,
+            );
         }
         result
     }

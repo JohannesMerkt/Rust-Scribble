@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext};
-use egui::{vec2, Color32, RichText};
+use egui::{vec2, Color32, RichText, Stroke};
 use rayon::prelude::*;
 use regex::Regex;
 
@@ -56,7 +56,15 @@ fn render_connect_view(
             ui.label("Server Port");
             ui.add(egui::widgets::DragValue::new(&mut networkstate.port).speed(1.0));
             ui.add_space(40.0);
-            if ui.button(RichText::new("Connect").color(Color32::DARK_GRAY).size(28.0)).clicked() || ui.input().key_pressed(egui::Key::Enter) {
+            if ui
+                .button(
+                    RichText::new("Connect")
+                        .color(Color32::DARK_GRAY)
+                        .size(28.0),
+                )
+                .clicked()
+                || ui.input().key_pressed(egui::Key::Enter)
+            {
                 // connect to the server
                 network_plugin::connect(networkstate);
             }
@@ -131,7 +139,7 @@ fn render_ingame_view(
             }
         });
 
-    if !networkstate.info.is_some() {
+    if networkstate.info.is_none() {
         return;
     }
 
@@ -169,8 +177,8 @@ fn render_ingame_view(
                             ui.horizontal(|ui| {
                                 for color in color_row {
                                     ui.selectable_value(
-                                        &mut clientstate.current_stroke.color,
-                                        *color,
+                                        &mut clientstate.current_stroke,
+                                        Stroke::new(10., *color),
                                         RichText::new("🔴").color(*color),
                                     );
                                 }
@@ -183,7 +191,7 @@ fn render_ingame_view(
                     ui.label(RichText::new("width").strong());
                     ui.add(egui::Slider::new(
                         &mut clientstate.current_stroke.width,
-                        1.0..=10.0,
+                        1.0..=20.0,
                     ));
                 });
 
@@ -196,8 +204,8 @@ fn render_ingame_view(
                 };
 
                 ui.selectable_value(
-                    &mut clientstate.current_stroke.color,
-                    Color32::WHITE,
+                    &mut clientstate.current_stroke,
+                    Stroke::new(20., Color32::WHITE),
                     "Eraser",
                 );
 
@@ -243,7 +251,7 @@ fn render_ingame_view(
                 fill: Color32::from_rgb(193, 225, 236),
                 ..default()
             };
-            my_group.show(ui, |_ui| {
+            my_group.show(ui, |ui| {
                 let to_screen = egui::emath::RectTransform::from_to(
                     egui::Rect::from_min_size(egui::Pos2::ZERO, response.rect.square_proportions()),
                     response.rect,
@@ -259,16 +267,6 @@ fn render_ingame_view(
                         });
                     };
 
-                    // As long as the mouse is not lifted, add new positions to current line
-                    if let Some(pointer_pos) = response.interact_pointer_pos() {
-                        if let Some(unwrap_current_line) = clientstate.current_line.as_mut() {
-                            let canvas_pos = from_screen * pointer_pos;
-                            if unwrap_current_line.positions.last() != Some(&canvas_pos) {
-                                unwrap_current_line.positions.push(canvas_pos);
-                                response.mark_changed();
-                            }
-                        }
-                    }
                     // Send new line when line is finished
                     if response.drag_released() && clientstate.current_line.is_some() {
                         network_plugin::send_line(
@@ -293,6 +291,31 @@ fn render_ingame_view(
                     }
                 }
                 painter.extend(shapes);
+
+                // As long as the mouse is not lifted, add new positions to current line
+                if let Some(pointer_pos) = response.interact_pointer_pos() {
+                    if let Some(unwrap_current_line) = clientstate.current_line.as_mut() {
+                        let canvas_pos = from_screen * pointer_pos;
+                        if unwrap_current_line.positions.last() != Some(&canvas_pos) {
+                            unwrap_current_line.positions.push(canvas_pos);
+                            response.mark_changed();
+                        }
+                    }
+
+                    if clientstate.current_stroke.color == Color32::WHITE {
+                        ui.painter().rect_stroke(
+                            egui::Rect::from_center_size(
+                                pointer_pos,
+                                egui::Vec2::new(
+                                    clientstate.current_stroke.width,
+                                    clientstate.current_stroke.width,
+                                ),
+                            ),
+                            0.,
+                            Stroke::new(1., Color32::BLACK),
+                        );
+                    }
+                }
                 response
             });
         });
@@ -336,7 +359,7 @@ fn render_chat_area(
                                     .color(player.color)
                                     .monospace(),
                             );
-                            ui.label(format!("{}", chat_message.message));
+                            ui.label(chat_message.message.to_string());
                         });
                         ui.set_min_width(100.0);
                     }

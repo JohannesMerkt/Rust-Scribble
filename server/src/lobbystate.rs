@@ -289,8 +289,9 @@ impl LobbyStateInner {
     pub fn chat_or_correct_guess(&mut self, player_id: i64, message: &str) -> GuessResult {
         let game_state = self.game_state.lock().unwrap();
         let mut players = self.players.lock().unwrap();
-        let nr_players_finished = Self::calc_position_finished(&*players);
-        let number_of_guessers = players.len() - 1;
+        let nr_players_finished = players.iter().filter(|p| p.guessed_word).count();
+        let number_of_guessers = players.iter().filter(
+            |player| !player.drawing && player.playing).count();
         let mut result = GuessResult::Incorrect;
         for player in &mut players.iter_mut() {
             if game_state.in_game && player.id == player_id {
@@ -323,10 +324,6 @@ impl LobbyStateInner {
                 game_state.time);
         }
         result
-    }
-
-    fn calc_position_finished(all_players: &[Player]) -> usize {
-        all_players.iter().filter(|p| p.guessed_word).count()
     }
 
     /// Gets a new random word from the word list and removes it from the word list.

@@ -96,6 +96,9 @@ fn handle_message(msg: Value, lobby: &mut LobbyState) -> Vec<Value> {
         )));
     } else if msg["kind"].eq("time_up") {
         clean_up_lobby = true;
+    } else if msg["kind"].eq("add_line") {
+        lobby.add_line_msg(msg.clone());
+        msg_to_send.push(msg);
     } else {
         msg_to_send.push(msg);
     }

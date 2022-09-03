@@ -15,8 +15,7 @@ use serde_json::{json, Value};
 use crate::rewardstrategy::{RewardStrategyDrawer, RewardStrategyGuesser};
 
 pub(crate) const MIN_NUMBER_PLAYERS: usize = 2;
-pub(crate) const GAME_TIME: i64 = 500;
-// seconds
+pub(crate) const GAME_TIME: i64 = 120; // seconds
 const MAX_ALLOWED_EDIT_DISTANCE_FOR_ALMOST: usize = 2;
 
 pub struct LobbyState {

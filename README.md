@@ -1,18 +1,50 @@
 # Rust Scribble Game README
 
-- only merge working code into master
-- use ```cargo clippy``` to check your code
-- check out ```messages.rs``` to see what messages are sent between client and server
+A client/server scribble game written in Rust.
+### Features
+ * Draw in multiple colours and sizes and erase mistakes easily
+ * Chat between users and correctly guessed words are not shown
+ * Concurrent lobbies/games on a single server
+ * Configurable words and gameplay
+ * Server port is configurable
+ * Network connection is end-to-end encrypted by default 
 
-## How to run it 
+---
+## Starting a Server
 
-1. Run Server
-    ```bash 
-    cd server
-    cargo run
-    ```
-2. Open new terminal and change directory to client. Then run  
-    ```bash 
-    cargo run 
-    ``` 
-3. For a second window to test e.g. the chat messages: repeat step 2.
+To Run the server, enter the server directory and use cargo run to start.
+    
+``` bash
+cargo run
+```
+### Configuration parameters
+The server can be configured on the command line. They can be used individually or in any combination
+
+The options available are
+* ```--port``` : Port number 
+* ```--words```: Word list file
+* ```--time```: Length of game (seconds)
+
+To use the command line configuration simply use
+```bash
+cargo run -- --port 4001 --words filepath/filename.txt
+```
+
+Servers can also be configured to run without end-to-end encryption, using the conditional compilation feature
+```bash
+cargo run --features no-encryption
+```
+**Note that all clients connecting will also need to be compiled with this features in order to communicate properly**
+
+----
+## Running a Client
+
+Open new terminal and change directory to client. Then run  
+```bash 
+cargo run 
+``` 
+
+To create a client without end-to-end encryption, use the same command as the server.
+```bash
+cargo run --features no-encryption
+```
